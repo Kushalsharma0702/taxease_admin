@@ -29,7 +29,7 @@ export type ClientStatus =
 
 export type PaymentStatus = 'pending' | 'partial' | 'paid' | 'overdue';
 
-export type DocumentStatus = 'pending' | 'complete' | 'missing';
+export type DocumentStatus = 'pending' | 'complete' | 'missing' | 'approved' | 'reupload_requested';
 
 export interface Client {
   id: string;

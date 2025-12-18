@@ -9,7 +9,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import {
   Select,
@@ -36,14 +35,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
+import { T1SectionCard } from '@/components/client/T1SectionCard';
+import { DocumentPreviewModal } from '@/components/client/DocumentPreviewModal';
 import { mockClients, mockDocuments, mockPayments, mockNotes, mockQuestionnaires } from '@/data/mockData';
-import { STATUS_LABELS, ClientStatus, PERMISSIONS, Note, Document as DocType, T1Question } from '@/types';
+import { STATUS_LABELS, ClientStatus, PERMISSIONS, Note, Document as DocType, T1Question, DocumentStatus } from '@/types';
 import {
   User,
   Mail,
@@ -52,26 +47,22 @@ import {
   FileText,
   CreditCard,
   MessageSquare,
-  Clock,
   Edit,
   ArrowLeft,
   Send,
-  Trash2,
   Loader2,
   Plus,
   MapPin,
   Building2,
-  CheckCircle2,
-  XCircle,
-  MinusCircle,
   AlertCircle,
   FileCheck,
   FileMinus,
   FileQuestion,
-  HelpCircle,
-  ChevronRight,
   UserCircle,
   Banknote,
+  CheckCircle2,
+  Clock,
+  RotateCcw,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -94,6 +85,7 @@ export default function ClientDetail() {
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
   const [isDeleteDocOpen, setIsDeleteDocOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<DocType | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', email: '', phone: '' });
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -109,20 +101,14 @@ export default function ClientDetail() {
     }, {} as Record<string, T1Question[]>);
   }, [questionnaire]);
 
-  // Get documents for a specific question
-  const getDocsForQuestion = (questionId: string) => {
-    return documents.filter((d) => d.questionId === questionId);
-  };
-
-  // Calculate document stats for a question
-  const getQuestionDocStats = (question: T1Question) => {
-    const docs = getDocsForQuestion(question.id);
-    const complete = docs.filter((d) => d.status === 'complete').length;
-    const pending = docs.filter((d) => d.status === 'pending').length;
-    const missing = docs.filter((d) => d.status === 'missing').length;
-    const required = question.requiredDocuments.length;
-    return { complete, pending, missing, required, total: docs.length };
-  };
+  // Calculate overall document stats
+  const overallStats = useMemo(() => {
+    const approved = documents.filter((d) => d.status === 'approved').length;
+    const pending = documents.filter((d) => d.status === 'pending' || d.status === 'complete').length;
+    const missing = documents.filter((d) => d.status === 'missing').length;
+    const reuploadRequested = documents.filter((d) => d.status === 'reupload_requested').length;
+    return { approved, pending, missing, reuploadRequested, total: documents.length };
+  }, [documents]);
 
   if (!client) {
     return (
@@ -219,24 +205,38 @@ export default function ClientDetail() {
     toast({ title: 'Document Deleted', description: 'The document has been removed.' });
   };
 
-  const handleRequestDocument = (docName?: string) => {
+  const handleRequestDocument = (docName?: string, reason?: string) => {
     toast({
       title: 'Request Sent',
       description: docName ? `Request for "${docName}" sent to client.` : 'Document request sent to client.',
     });
   };
 
-  const AnswerIcon = ({ answer }: { answer: 'yes' | 'no' | 'na' | null }) => {
-    if (answer === 'yes') return <CheckCircle2 className="h-5 w-5 text-green-500" />;
-    if (answer === 'no') return <XCircle className="h-5 w-5 text-muted-foreground" />;
-    if (answer === 'na') return <MinusCircle className="h-5 w-5 text-muted-foreground" />;
-    return <HelpCircle className="h-5 w-5 text-orange-500" />;
+  const handleApproveDocument = async (docId: string) => {
+    setDocuments((prev) =>
+      prev.map((d) => (d.id === docId ? { ...d, status: 'approved' as DocumentStatus } : d))
+    );
+    toast({ title: 'Document Approved', description: 'The document has been approved.' });
   };
 
-  const DocumentStatusIcon = ({ status }: { status: string }) => {
-    if (status === 'complete') return <FileCheck className="h-4 w-4 text-green-500" />;
-    if (status === 'pending') return <FileQuestion className="h-4 w-4 text-yellow-500" />;
-    return <FileMinus className="h-4 w-4 text-destructive" />;
+  const handleRequestReupload = async (docId: string, reason: string) => {
+    setDocuments((prev) =>
+      prev.map((d) =>
+        d.id === docId ? { ...d, status: 'reupload_requested' as DocumentStatus, notes: reason } : d
+      )
+    );
+  };
+
+  const handleBulkRequestMissing = (category: string) => {
+    toast({
+      title: 'Bulk Request Sent',
+      description: `Request for all missing documents in "${category}" sent to client.`,
+    });
+  };
+
+  const handleViewDocument = (doc: DocType) => {
+    setSelectedDoc(doc);
+    setIsPreviewOpen(true);
   };
 
   return (
@@ -477,179 +477,87 @@ export default function ClientDetail() {
             </Card>
           </TabsContent>
 
-          {/* T1 Questionnaire Tab */}
+          {/* T1 Questionnaire Tab - Redesigned with Inline Documents */}
           <TabsContent value="questionnaire" className="mt-6 animate-fade-in">
             {questionnaire ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
+              <div className="space-y-6">
+                {/* Header with Overall Stats */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <h3 className="text-lg font-semibold">T1 Tax Return Questionnaire</h3>
+                    <h3 className="text-lg font-semibold">T1 Tax Return Documents</h3>
                     <p className="text-sm text-muted-foreground">
                       Completed on {questionnaire.completedAt?.toLocaleDateString()} • {questionnaire.questions.length} questions
                     </p>
                   </div>
-                  {hasPermission(PERMISSIONS.REQUEST_DOCUMENTS) && (
-                    <Button variant="outline" onClick={() => handleRequestDocument()} className="transition-all duration-200 hover:scale-105">
-                      <Send className="h-4 w-4 mr-2" />
-                      Request All Missing
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-4">
+                    {/* Quick Stats */}
+                    <div className="flex items-center gap-3 text-sm">
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-green-600">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        <span className="font-medium">{overallStats.approved}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-yellow-500/10 text-yellow-600">
+                        <Clock className="h-3.5 w-3.5" />
+                        <span className="font-medium">{overallStats.pending}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-destructive/10 text-destructive">
+                        <FileMinus className="h-3.5 w-3.5" />
+                        <span className="font-medium">{overallStats.missing}</span>
+                      </div>
+                      {overallStats.reuploadRequested > 0 && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/10 text-orange-600">
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          <span className="font-medium">{overallStats.reuploadRequested}</span>
+                        </div>
+                      )}
+                    </div>
+                    {hasPermission(PERMISSIONS.REQUEST_DOCUMENTS) && (
+                      <Button variant="outline" onClick={() => handleRequestDocument()} className="transition-all duration-200 hover:scale-105">
+                        <Send className="h-4 w-4 mr-2" />
+                        Request All Missing
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
-                <Accordion type="multiple" className="space-y-3">
+                {/* Legend */}
+                <div className="flex flex-wrap items-center gap-4 p-3 rounded-lg bg-muted/30 border text-xs">
+                  <span className="font-medium text-muted-foreground">Status Legend:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-green-600">✅</span>
+                    <span>Approved</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-yellow-600">🟡</span>
+                    <span>Pending Review</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-destructive">🔴</span>
+                    <span>Missing</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-orange-600">🔁</span>
+                    <span>Re-upload Requested</span>
+                  </div>
+                </div>
+
+                {/* Section Cards - All Expanded by Default */}
+                <div className="space-y-4">
                   {Object.entries(questionsByCategory).map(([category, questions]) => (
-                    <AccordionItem key={category} value={category} className="border rounded-lg px-4 bg-card transition-all duration-200 hover:shadow-sm">
-                      <AccordionTrigger className="hover:no-underline py-4">
-                        <div className="flex items-center gap-3 text-left">
-                          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                            <FileText className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-semibold">{category}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {questions.filter((q) => q.answer === 'yes').length} applicable •{' '}
-                              {questions.reduce((acc, q) => acc + getDocsForQuestion(q.id).length, 0)} documents
-                            </p>
-                          </div>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="pb-4">
-                        <div className="space-y-4 pt-2">
-                          {questions.map((question, qIndex) => {
-                            const docs = getDocsForQuestion(question.id);
-                            const stats = getQuestionDocStats(question);
-
-                            return (
-                              <div
-                                key={question.id}
-                                className="rounded-lg border border-border p-4 transition-all duration-200 hover:bg-muted/20"
-                                style={{ animationDelay: `${qIndex * 50}ms` }}
-                              >
-                                <div className="flex items-start gap-3">
-                                  <AnswerIcon answer={question.answer} />
-                                  <div className="flex-1 space-y-3">
-                                    <div className="flex items-start justify-between gap-4">
-                                      <div>
-                                        <p className="font-medium">{question.question}</p>
-                                        <p className="text-sm text-muted-foreground mt-1">
-                                          Answer:{' '}
-                                          <span className={question.answer === 'yes' ? 'text-green-600 font-medium' : 'text-muted-foreground'}>
-                                            {question.answer === 'yes' ? 'Yes' : question.answer === 'no' ? 'No' : question.answer === 'na' ? 'N/A' : 'Not Answered'}
-                                          </span>
-                                        </p>
-                                      </div>
-                                      {question.answer === 'yes' && stats.required > 0 && (
-                                        <Badge variant={stats.complete === stats.required ? 'default' : 'secondary'} className="shrink-0">
-                                          {stats.complete}/{stats.required} docs
-                                        </Badge>
-                                      )}
-                                    </div>
-
-                                    {/* Documents for this question */}
-                                    {question.answer === 'yes' && (
-                                      <div className="mt-3 space-y-2">
-                                        {question.requiredDocuments.length > 0 && (
-                                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Required Documents</p>
-                                        )}
-                                        <div className="grid gap-2">
-                                          {question.requiredDocuments.map((reqDoc, dIndex) => {
-                                            const uploadedDoc = docs.find((d) => d.name.toLowerCase().includes(reqDoc.toLowerCase().split(' ')[0]));
-                                            return (
-                                              <div
-                                                key={dIndex}
-                                                className={`flex items-center justify-between p-3 rounded-lg border transition-all duration-200 ${
-                                                  uploadedDoc?.status === 'complete'
-                                                    ? 'bg-green-500/5 border-green-500/20'
-                                                    : uploadedDoc?.status === 'pending'
-                                                    ? 'bg-yellow-500/5 border-yellow-500/20'
-                                                    : 'bg-destructive/5 border-destructive/20'
-                                                }`}
-                                              >
-                                                <div className="flex items-center gap-3">
-                                                  <DocumentStatusIcon status={uploadedDoc?.status || 'missing'} />
-                                                  <div>
-                                                    <p className="text-sm font-medium">{uploadedDoc?.name || reqDoc}</p>
-                                                    {uploadedDoc && (
-                                                      <p className="text-xs text-muted-foreground">
-                                                        v{uploadedDoc.version}
-                                                        {uploadedDoc.uploadedAt && ` • ${uploadedDoc.uploadedAt.toLocaleDateString()}`}
-                                                      </p>
-                                                    )}
-                                                  </div>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                  {uploadedDoc ? (
-                                                    <>
-                                                      <StatusBadge status={uploadedDoc.status} type="document" />
-                                                      <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => {
-                                                          setSelectedDoc(uploadedDoc);
-                                                          setIsDeleteDocOpen(true);
-                                                        }}
-                                                        className="text-destructive hover:text-destructive h-8 w-8 p-0"
-                                                      >
-                                                        <Trash2 className="h-4 w-4" />
-                                                      </Button>
-                                                    </>
-                                                  ) : (
-                                                    hasPermission(PERMISSIONS.REQUEST_DOCUMENTS) && (
-                                                      <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => handleRequestDocument(reqDoc)}
-                                                        className="h-8 transition-all duration-200 hover:scale-105"
-                                                      >
-                                                        <Send className="h-3 w-3 mr-1" />
-                                                        Request
-                                                      </Button>
-                                                    )
-                                                  )}
-                                                </div>
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-
-                                        {/* Additional uploaded documents not in required list */}
-                                        {docs.filter((d) => !question.requiredDocuments.some((req) => d.name.toLowerCase().includes(req.toLowerCase().split(' ')[0]))).length > 0 && (
-                                          <div className="mt-3">
-                                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Additional Documents</p>
-                                            {docs
-                                              .filter((d) => !question.requiredDocuments.some((req) => d.name.toLowerCase().includes(req.toLowerCase().split(' ')[0])))
-                                              .map((doc) => (
-                                                <div
-                                                  key={doc.id}
-                                                  className="flex items-center justify-between p-3 rounded-lg border bg-muted/20 transition-all duration-200 hover:bg-muted/40"
-                                                >
-                                                  <div className="flex items-center gap-3">
-                                                    <DocumentStatusIcon status={doc.status} />
-                                                    <div>
-                                                      <p className="text-sm font-medium">{doc.name}</p>
-                                                      <p className="text-xs text-muted-foreground">
-                                                        v{doc.version}
-                                                        {doc.uploadedAt && ` • ${doc.uploadedAt.toLocaleDateString()}`}
-                                                      </p>
-                                                    </div>
-                                                  </div>
-                                                  <StatusBadge status={doc.status} type="document" />
-                                                </div>
-                                              ))}
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
+                    <T1SectionCard
+                      key={category}
+                      category={category}
+                      questions={questions}
+                      documents={documents}
+                      onApproveDoc={handleApproveDocument}
+                      onRequestReupload={handleRequestReupload}
+                      onRequestMissing={handleRequestDocument}
+                      onViewDoc={handleViewDocument}
+                      onBulkRequestMissing={handleBulkRequestMissing}
+                      canEdit={hasPermission(PERMISSIONS.REQUEST_DOCUMENTS)}
+                    />
                   ))}
-                </Accordion>
+                </div>
               </div>
             ) : (
               <Card>
@@ -854,6 +762,16 @@ export default function ClientDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Document Preview Modal */}
+      <DocumentPreviewModal
+        document={selectedDoc}
+        isOpen={isPreviewOpen}
+        onClose={() => {
+          setIsPreviewOpen(false);
+          setSelectedDoc(null);
+        }}
+      />
     </DashboardLayout>
   );
 }
