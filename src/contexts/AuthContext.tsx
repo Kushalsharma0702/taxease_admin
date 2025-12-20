@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, UserRole, PERMISSIONS } from '@/types';
+import { getSession, setSession, clearSession, refreshSession } from '@/lib/session';
 
 interface AuthContextType {
   user: User | null;
@@ -39,26 +40,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('taxease_user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setIsLoading(false);
+    // Check for existing session on mount
+    const loadSession = async () => {
+      const sessionUser = await getSession();
+      if (sessionUser) {
+        setUser(sessionUser);
+        // Refresh session to extend expiry
+        await refreshSession();
+      }
+      setIsLoading(false);
+    };
+    
+    loadSession();
   }, []);
+
+  // Refresh session every 5 minutes to keep it active
+  useEffect(() => {
+    if (!user) return;
+
+    const refreshInterval = setInterval(async () => {
+      await refreshSession();
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(refreshInterval);
+  }, [user]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     const foundUser = MOCK_USERS.find(u => u.email === email);
     if (foundUser && password === 'demo123') {
       setUser(foundUser);
-      localStorage.setItem('taxease_user', JSON.stringify(foundUser));
+      await setSession(foundUser);
       return true;
     }
     return false;
   };
 
-  const logout = () => {
+  const logout = async () => {
     setUser(null);
-    localStorage.removeItem('taxease_user');
+    await clearSession();
   };
 
   const hasPermission = (permission: string): boolean => {

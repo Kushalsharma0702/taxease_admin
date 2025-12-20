@@ -579,7 +579,7 @@ export const mockPayments: Payment[] = [
 export const mockNotes: Note[] = [
   { id: '1', clientId: '1', content: 'Client has income from multiple employers - TCS and Infosys', isClientFacing: false, authorId: '2', authorName: 'Priya Patel', createdAt: new Date('2024-01-16') },
   { id: '2', clientId: '1', content: 'Please upload your PPF passbook when available', isClientFacing: true, authorId: '2', authorName: 'Priya Patel', createdAt: new Date('2024-01-17') },
-  { id: '3', clientId: '2', content: 'Review complete, proceeding to preparation. Medical expenses under 80D verified.', isClientFacing: false, authorId: '2', authorName: 'Priya Patel', createdAt: new Date('2024-01-22') },
+  { id: '3', clientId: '2', content: 'Review complete, proceeding to preparation. Medical expenses verified.', isClientFacing: false, authorId: '2', authorName: 'Priya Patel', createdAt: new Date('2024-01-22') },
   { id: '4', clientId: '3', content: 'Rental income from Anna Nagar property needs municipal tax deduction calculation', isClientFacing: false, authorId: '3', authorName: 'Amit Singh', createdAt: new Date('2024-01-19') },
   { id: '5', clientId: '5', content: 'Capital gains from property sale - need to verify indexation benefit eligibility', isClientFacing: false, authorId: '3', authorName: 'Amit Singh', createdAt: new Date('2024-01-12') },
   { id: '6', clientId: '7', content: 'Foreign income from US - DTAA relief applicable. Form 67 required.', isClientFacing: false, authorId: '2', authorName: 'Priya Patel', createdAt: new Date('2024-01-24') },

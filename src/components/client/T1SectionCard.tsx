@@ -33,7 +33,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   'Investment Income': '📈',
   'RRSP Contributions': '🏦',
   'Medical Expenses': '🏥',
-  'Childcare Expenses': '👶',
+  'Daycare Expenses': '👶',
   'Home Office': '🏠',
   'Moving Expenses': '🚚',
   'Tuition & Education': '🎓',
