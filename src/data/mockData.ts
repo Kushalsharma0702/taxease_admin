@@ -111,6 +111,22 @@ export const mockPersonalInfo: Record<string, PersonalInfo> = {
       postalCode: '380054',
     },
   },
+  '9': {
+    sin: '***-***-999',
+    dateOfBirth: new Date('1989-08-14'),
+    maritalStatus: 'married',
+    address: {
+      street: '101, Green Valley Apartments, Sector 62',
+      city: 'Noida',
+      province: 'Uttar Pradesh',
+      postalCode: '201301',
+    },
+    bankInfo: {
+      institution: 'ICICI Bank',
+      transitNumber: '00951',
+      accountNumber: '****4567',
+    },
+  },
 };
 
 // T1 Questionnaire data
@@ -381,6 +397,83 @@ export const mockQuestionnaires: T1Questionnaire[] = [
     ],
     completedAt: new Date('2024-01-22'),
   },
+  {
+    clientId: '9',
+    filingYear: 2024,
+    questions: [
+      {
+        id: 'q1',
+        category: 'Employment Income',
+        question: 'Did you have employment income in 2024?',
+        answer: 'yes',
+        requiredDocuments: ['Form 16 - Google India'],
+      },
+      {
+        id: 'q2',
+        category: 'Employment Income',
+        question: 'Did you have multiple employers in 2024?',
+        answer: 'no',
+        requiredDocuments: [],
+      },
+      {
+        id: 'q3',
+        category: 'Investment Income',
+        question: 'Did you receive any investment income (dividends, interest)?',
+        answer: 'yes',
+        requiredDocuments: ['SBI FD Interest Certificate', 'HDFC Dividend Statement', 'Mutual Fund Statement'],
+      },
+      {
+        id: 'q4',
+        category: 'PPF/EPF Contributions',
+        question: 'Did you contribute to PPF/EPF in 2024?',
+        answer: 'yes',
+        requiredDocuments: ['PPF Passbook', 'EPF Statement'],
+      },
+      {
+        id: 'q5',
+        category: 'Medical Expenses',
+        question: 'Do you have medical expenses to claim?',
+        answer: 'yes',
+        requiredDocuments: ['Health Insurance Premium', 'Medical Bills - Fortis Hospital', 'Parents Health Insurance'],
+      },
+      {
+        id: 'q6',
+        category: 'Rental Income',
+        question: 'Did you receive rental income from property?',
+        answer: 'yes',
+        requiredDocuments: ['Rent Agreement - Gurgaon Property', 'Property Tax Receipt', 'Tenant Details'],
+      },
+      {
+        id: 'q7',
+        category: 'Self-Employment',
+        question: 'Did you have self-employment or freelance income?',
+        answer: 'yes',
+        requiredDocuments: ['Consulting Invoices', 'Bank Statements', 'Professional Tax Receipt'],
+      },
+      {
+        id: 'q8',
+        category: 'Capital Gains',
+        question: 'Did you sell any stocks, bonds, or property?',
+        answer: 'yes',
+        requiredDocuments: ['Zerodha Capital Gains Statement', 'Stock Sale Transactions', 'Mutual Fund Redemption Statements'],
+      },
+      {
+        id: 'q9',
+        category: 'Foreign Income',
+        question: 'Did you receive any foreign income?',
+        answer: 'yes',
+        requiredDocuments: ['US Consulting Income Statement', 'Foreign Tax Credit Certificate', 'DTAA Documents'],
+      },
+      {
+        id: 'q10',
+        category: 'Tuition',
+        question: 'Did you or your dependents pay tuition fees?',
+        answer: 'yes',
+        requiredDocuments: ['School Tuition Receipts - Kids', 'Education Loan Interest Certificate'],
+      },
+    ],
+    completedAt: new Date('2024-01-28'),
+  },
 ];
 
 export const mockClients: Client[] = [
@@ -510,6 +603,22 @@ export const mockClients: Client[] = [
     updatedAt: new Date('2024-01-26'),
     personalInfo: mockPersonalInfo['8'],
   },
+  {
+    id: '9',
+    name: 'Piyush Malhotra',
+    email: 'piyush.malhotra@email.com',
+    phone: '+91 98765 11111',
+    filingYear: 2024,
+    status: 'under_review',
+    paymentStatus: 'partial',
+    assignedAdminId: '2',
+    assignedAdminName: 'Priya Patel',
+    totalAmount: 48000,
+    paidAmount: 25000,
+    createdAt: new Date('2024-01-25'),
+    updatedAt: new Date('2024-01-29'),
+    personalInfo: mockPersonalInfo['9'],
+  },
 ];
 
 export const mockDocuments: Document[] = [
@@ -566,6 +675,34 @@ export const mockDocuments: Document[] = [
   { id: '36', clientId: '8', name: 'Trading Statement - Groww', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-10'), questionId: 'q2', url: demoFile },
   { id: '37', clientId: '8', name: 'Capital Gains Report - Groww', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-10'), questionId: 'q2', url: demoFile },
   { id: '38', clientId: '8', name: 'Dividend Statement', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-11'), url: demoFile },
+  
+  // Client 9 - Piyush Malhotra
+  { id: '39', clientId: '9', name: 'Form 16 - Google India', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-26'), questionId: 'q1', url: demoFile },
+  { id: '40', clientId: '9', name: 'SBI FD Interest Certificate', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-26'), questionId: 'q3', url: demoFile },
+  { id: '41', clientId: '9', name: 'HDFC Dividend Statement', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-26'), questionId: 'q3', url: demoFile },
+  { id: '42', clientId: '9', name: 'Mutual Fund Statement - Axis MF', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-26'), questionId: 'q3', url: demoFile },
+  { id: '43', clientId: '9', name: 'PPF Passbook', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-27'), questionId: 'q4', url: demoFile },
+  { id: '44', clientId: '9', name: 'EPF Statement', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-27'), questionId: 'q4', url: demoFile },
+  { id: '45', clientId: '9', name: 'Health Insurance Premium - Self', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-27'), questionId: 'q5', url: demoFile },
+  { id: '46', clientId: '9', name: 'Medical Bills - Fortis Hospital', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-27'), questionId: 'q5', url: demoFile },
+  { id: '47', clientId: '9', name: 'Parents Health Insurance', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-27'), questionId: 'q5', url: demoFile },
+  { id: '48', clientId: '9', name: 'Rent Agreement - Gurgaon Property', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-28'), questionId: 'q6', url: demoFile },
+  { id: '49', clientId: '9', name: 'Property Tax Receipt', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-28'), questionId: 'q6', url: demoFile },
+  { id: '50', clientId: '9', name: 'Tenant Details', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-28'), questionId: 'q6', url: demoFile },
+  { id: '51', clientId: '9', name: 'Consulting Invoices', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-28'), questionId: 'q7', url: demoFile },
+  { id: '52', clientId: '9', name: 'Bank Statements - Consulting', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-28'), questionId: 'q7', url: demoFile },
+  { id: '53', clientId: '9', name: 'Professional Tax Receipt', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-28'), questionId: 'q7', url: demoFile },
+  { id: '54', clientId: '9', name: 'Zerodha Capital Gains Statement', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-28'), questionId: 'q8', url: demoFile },
+  { id: '55', clientId: '9', name: 'Stock Sale Transactions', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-28'), questionId: 'q8', url: demoFile },
+  { id: '56', clientId: '9', name: 'Mutual Fund Redemption Statements', type: 'investment', status: 'pending', version: 1, questionId: 'q8', url: demoFile },
+  { id: '57', clientId: '9', name: 'US Consulting Income Statement', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-29'), questionId: 'q9', url: demoFile },
+  { id: '58', clientId: '9', name: 'Foreign Tax Credit Certificate', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-29'), questionId: 'q9', url: demoFile },
+  { id: '59', clientId: '9', name: 'DTAA Documents', type: 'deduction', status: 'pending', version: 1, questionId: 'q9', url: demoFile },
+  { id: '60', clientId: '9', name: 'School Tuition Receipts - Kids', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-29'), questionId: 'q10', url: demoFile },
+  { id: '61', clientId: '9', name: 'Education Loan Interest Certificate', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-29'), questionId: 'q10', url: demoFile },
+  { id: '62', clientId: '9', name: 'Home Loan Interest Certificate - ICICI', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-29'), url: demoFile },
+  { id: '63', clientId: '9', name: 'LIC Premium Receipt', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-29'), url: demoFile },
+  { id: '64', clientId: '9', name: 'NPS Statement', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-29'), url: demoFile },
 ];
 
 export const mockPayments: Payment[] = [
@@ -574,6 +711,7 @@ export const mockPayments: Payment[] = [
   { id: '3', clientId: '5', amount: 42000, method: 'UPI', createdAt: new Date('2024-01-08'), createdBy: 'Amit Singh' },
   { id: '4', clientId: '7', amount: 55000, method: 'NEFT', createdAt: new Date('2023-03-20'), createdBy: 'Priya Patel' },
   { id: '5', clientId: '8', amount: 32000, method: 'UPI', createdAt: new Date('2024-01-24'), createdBy: 'Amit Singh' },
+  { id: '6', clientId: '9', amount: 25000, method: 'UPI', createdAt: new Date('2024-01-27'), createdBy: 'Priya Patel' },
 ];
 
 export const mockNotes: Note[] = [
@@ -583,6 +721,10 @@ export const mockNotes: Note[] = [
   { id: '4', clientId: '3', content: 'Rental income from Anna Nagar property needs municipal tax deduction calculation', isClientFacing: false, authorId: '3', authorName: 'Amit Singh', createdAt: new Date('2024-01-19') },
   { id: '5', clientId: '5', content: 'Capital gains from property sale - need to verify indexation benefit eligibility', isClientFacing: false, authorId: '3', authorName: 'Amit Singh', createdAt: new Date('2024-01-12') },
   { id: '6', clientId: '7', content: 'Foreign income from US - DTAA relief applicable. Form 67 required.', isClientFacing: false, authorId: '2', authorName: 'Priya Patel', createdAt: new Date('2024-01-24') },
+  { id: '7', clientId: '9', content: 'Complex filing - Multiple income sources: Employment (Google), Rental, Consulting, Foreign income (US)', isClientFacing: false, authorId: '2', authorName: 'Priya Patel', createdAt: new Date('2024-01-26') },
+  { id: '8', clientId: '9', content: 'Capital gains from stocks and mutual funds - need to segregate LTCG and STCG', isClientFacing: false, authorId: '2', authorName: 'Priya Patel', createdAt: new Date('2024-01-27') },
+  { id: '9', clientId: '9', content: 'Foreign income from US consulting - DTAA documents pending. Form 67 will be filed.', isClientFacing: false, authorId: '2', authorName: 'Priya Patel', createdAt: new Date('2024-01-28') },
+  { id: '10', clientId: '9', content: 'Please provide final DTAA documents and mutual fund redemption statement by Feb 5', isClientFacing: true, authorId: '2', authorName: 'Priya Patel', createdAt: new Date('2024-01-29') },
 ];
 
 export const mockAdmins: User[] = [
@@ -621,6 +763,9 @@ export const mockAuditLogs: AuditLog[] = [
   { id: '3', action: 'Document Requested', entityType: 'document', entityId: '3', newValue: 'PPF Passbook', performedBy: '2', performedByName: 'Priya Patel', timestamp: new Date('2024-01-17T09:00:00') },
   { id: '4', action: 'Client Created', entityType: 'client', entityId: '6', newValue: 'Kavitha Reddy', performedBy: '1', performedByName: 'Rahul Kapoor', timestamp: new Date('2024-01-18T11:00:00') },
   { id: '5', action: 'Admin Permission Changed', entityType: 'admin', entityId: '3', oldValue: 'No Payment Access', newValue: 'add_edit_payment', performedBy: '1', performedByName: 'Rahul Kapoor', timestamp: new Date('2024-01-19T16:45:00') },
+  { id: '6', action: 'Client Created', entityType: 'client', entityId: '9', newValue: 'Piyush Malhotra', performedBy: '2', performedByName: 'Priya Patel', timestamp: new Date('2024-01-25T09:30:00') },
+  { id: '7', action: 'Payment Added', entityType: 'payment', entityId: '6', newValue: '₹25,000 via UPI', performedBy: '2', performedByName: 'Priya Patel', timestamp: new Date('2024-01-27T11:45:00') },
+  { id: '8', action: 'Status Updated', entityType: 'client', entityId: '9', oldValue: 'Documents Pending', newValue: 'Under Review', performedBy: '2', performedByName: 'Priya Patel', timestamp: new Date('2024-01-29T15:20:00') },
 ];
 
 export const getAnalyticsData = () => ({
