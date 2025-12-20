@@ -1,4 +1,5 @@
 import { Client, Document, Payment, Note, AuditLog, User, T1Questionnaire, PersonalInfo } from '@/types';
+import demoFile from '@/assets/demo_file.pdf';
 
 // Personal Info for clients
 export const mockPersonalInfo: Record<string, PersonalInfo> = {
@@ -513,58 +514,58 @@ export const mockClients: Client[] = [
 
 export const mockDocuments: Document[] = [
   // Client 1 - Rajesh Kumar Sharma
-  { id: '1', clientId: '1', name: 'Form 16 - TCS', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-16'), questionId: 'q1' },
-  { id: '2', clientId: '1', name: 'Form 16 - Infosys', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-17'), questionId: 'q2' },
-  { id: '3', clientId: '1', name: 'HDFC FD Interest Certificate', type: 'investment', status: 'pending', version: 1, questionId: 'q3' },
-  { id: '4', clientId: '1', name: 'PPF Passbook', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-15'), questionId: 'q4' },
-  { id: '5', clientId: '1', name: 'EPF Statement', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-15'), questionId: 'q4' },
-  { id: '6', clientId: '1', name: 'Capital Gains Statement - Zerodha', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-18'), questionId: 'q8' },
-  { id: '7', clientId: '1', name: 'Stock Transaction Report', type: 'investment', status: 'pending', version: 1, questionId: 'q8' },
+  { id: '1', clientId: '1', name: 'Form 16 - TCS', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-16'), questionId: 'q1', url: demoFile },
+  { id: '2', clientId: '1', name: 'Form 16 - Infosys', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-17'), questionId: 'q2', url: demoFile },
+  { id: '3', clientId: '1', name: 'HDFC FD Interest Certificate', type: 'investment', status: 'pending', version: 1, questionId: 'q3', url: demoFile },
+  { id: '4', clientId: '1', name: 'PPF Passbook', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-15'), questionId: 'q4', url: demoFile },
+  { id: '5', clientId: '1', name: 'EPF Statement', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-15'), questionId: 'q4', url: demoFile },
+  { id: '6', clientId: '1', name: 'Capital Gains Statement - Zerodha', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-18'), questionId: 'q8', url: demoFile },
+  { id: '7', clientId: '1', name: 'Stock Transaction Report', type: 'investment', status: 'pending', version: 1, questionId: 'q8', url: demoFile },
   
   // Client 2 - Ananya Gupta
-  { id: '8', clientId: '2', name: 'Form 16 - Wipro', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-11'), questionId: 'q1' },
-  { id: '9', clientId: '2', name: 'Form 16A - Consulting', type: 'income', status: 'complete', version: 2, uploadedAt: new Date('2024-01-20'), questionId: 'q2' },
-  { id: '10', clientId: '2', name: 'Medical Bills - Apollo Hospital', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-12'), questionId: 'q5' },
-  { id: '11', clientId: '2', name: 'Pharmacy Receipts', type: 'deduction', status: 'pending', version: 1, questionId: 'q5' },
-  { id: '12', clientId: '2', name: 'Health Insurance Premium Receipt', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-14') },
+  { id: '8', clientId: '2', name: 'Form 16 - Wipro', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-11'), questionId: 'q1', url: demoFile },
+  { id: '9', clientId: '2', name: 'Form 16A - Consulting', type: 'income', status: 'complete', version: 2, uploadedAt: new Date('2024-01-20'), questionId: 'q2', url: demoFile },
+  { id: '10', clientId: '2', name: 'Medical Bills - Apollo Hospital', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-12'), questionId: 'q5', url: demoFile },
+  { id: '11', clientId: '2', name: 'Pharmacy Receipts', type: 'deduction', status: 'pending', version: 1, questionId: 'q5', url: demoFile },
+  { id: '12', clientId: '2', name: 'Health Insurance Premium Receipt', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-14'), url: demoFile },
   
   // Client 3 - Vikram Krishnamurthy
-  { id: '13', clientId: '3', name: 'Form 16 - HCL Technologies', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-06'), questionId: 'q1' },
-  { id: '14', clientId: '3', name: 'Rent Agreement - Anna Nagar Property', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-07'), questionId: 'q2' },
-  { id: '15', clientId: '3', name: 'Property Tax Receipt', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-08'), questionId: 'q2' },
-  { id: '16', clientId: '3', name: 'SBI FD Interest Certificate', type: 'investment', status: 'pending', version: 1, questionId: 'q3' },
-  { id: '17', clientId: '3', name: 'Mutual Fund Statement - SBI MF', type: 'investment', status: 'missing', version: 1, questionId: 'q3' },
+  { id: '13', clientId: '3', name: 'Form 16 - HCL Technologies', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-06'), questionId: 'q1', url: demoFile },
+  { id: '14', clientId: '3', name: 'Rent Agreement - Anna Nagar Property', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-07'), questionId: 'q2', url: demoFile },
+  { id: '15', clientId: '3', name: 'Property Tax Receipt', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-08'), questionId: 'q2', url: demoFile },
+  { id: '16', clientId: '3', name: 'SBI FD Interest Certificate', type: 'investment', status: 'pending', version: 1, questionId: 'q3', url: demoFile },
+  { id: '17', clientId: '3', name: 'Mutual Fund Statement - SBI MF', type: 'investment', status: 'missing', version: 1, questionId: 'q3', url: demoFile },
   
   // Client 4 - Sneha Banerjee
-  { id: '18', clientId: '4', name: 'Form 16 - Cognizant', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-03'), questionId: 'q1' },
-  { id: '19', clientId: '4', name: 'Freelance Invoices - Upwork', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-04'), questionId: 'q2' },
-  { id: '20', clientId: '4', name: 'Bank Statement - HDFC', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-05'), questionId: 'q2' },
-  { id: '21', clientId: '4', name: 'GST Returns', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-06') },
+  { id: '18', clientId: '4', name: 'Form 16 - Cognizant', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-03'), questionId: 'q1', url: demoFile },
+  { id: '19', clientId: '4', name: 'Freelance Invoices - Upwork', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-04'), questionId: 'q2', url: demoFile },
+  { id: '20', clientId: '4', name: 'Bank Statement - HDFC', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-05'), questionId: 'q2', url: demoFile },
+  { id: '21', clientId: '4', name: 'GST Returns', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-06'), url: demoFile },
   
   // Client 5 - Arjun Mehta
-  { id: '22', clientId: '5', name: 'Form 16 - Accenture', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-02'), questionId: 'q1' },
-  { id: '23', clientId: '5', name: 'Property Sale Deed', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-03'), questionId: 'q2' },
-  { id: '24', clientId: '5', name: 'Property Purchase Deed - 2018', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-03'), questionId: 'q2' },
-  { id: '25', clientId: '5', name: 'Home Loan Interest Certificate - ICICI', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-04'), questionId: 'q3' },
-  { id: '26', clientId: '5', name: 'Principal Statement - ICICI', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-04'), questionId: 'q3' },
+  { id: '22', clientId: '5', name: 'Form 16 - Accenture', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-02'), questionId: 'q1', url: demoFile },
+  { id: '23', clientId: '5', name: 'Property Sale Deed', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-03'), questionId: 'q2', url: demoFile },
+  { id: '24', clientId: '5', name: 'Property Purchase Deed - 2018', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-03'), questionId: 'q2', url: demoFile },
+  { id: '25', clientId: '5', name: 'Home Loan Interest Certificate - ICICI', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-04'), questionId: 'q3', url: demoFile },
+  { id: '26', clientId: '5', name: 'Principal Statement - ICICI', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-04'), questionId: 'q3', url: demoFile },
   
   // Client 6 - Kavitha Reddy
-  { id: '27', clientId: '6', name: 'Form 16 - Tech Mahindra', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-19'), questionId: 'q1' },
-  { id: '28', clientId: '6', name: 'Education Loan Interest Certificate', type: 'deduction', status: 'pending', version: 1, questionId: 'q2' },
-  { id: '29', clientId: '6', name: 'Tuition Fee Receipt - IIM', type: 'deduction', status: 'missing', version: 1 },
+  { id: '27', clientId: '6', name: 'Form 16 - Tech Mahindra', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-19'), questionId: 'q1', url: demoFile },
+  { id: '28', clientId: '6', name: 'Education Loan Interest Certificate', type: 'deduction', status: 'pending', version: 1, questionId: 'q2', url: demoFile },
+  { id: '29', clientId: '6', name: 'Tuition Fee Receipt - IIM', type: 'deduction', status: 'missing', version: 1, url: demoFile },
   
   // Client 7 - Sanjay Agarwal
-  { id: '30', clientId: '7', name: 'Form 16 - Microsoft India', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-21'), questionId: 'q1' },
-  { id: '31', clientId: '7', name: 'US Income Statement', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-22'), questionId: 'q2' },
-  { id: '32', clientId: '7', name: 'DTAA Certificate', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-22'), questionId: 'q2' },
-  { id: '33', clientId: '7', name: 'Donation Receipt - PM CARES', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-23'), questionId: 'q3' },
-  { id: '34', clientId: '7', name: 'Donation Receipt - CRY Foundation', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-23'), questionId: 'q3' },
+  { id: '30', clientId: '7', name: 'Form 16 - Microsoft India', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-21'), questionId: 'q1', url: demoFile },
+  { id: '31', clientId: '7', name: 'US Income Statement', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-22'), questionId: 'q2', url: demoFile },
+  { id: '32', clientId: '7', name: 'DTAA Certificate', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-22'), questionId: 'q2', url: demoFile },
+  { id: '33', clientId: '7', name: 'Donation Receipt - PM CARES', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-23'), questionId: 'q3', url: demoFile },
+  { id: '34', clientId: '7', name: 'Donation Receipt - CRY Foundation', type: 'deduction', status: 'complete', version: 1, uploadedAt: new Date('2024-01-23'), questionId: 'q3', url: demoFile },
   
   // Client 8 - Deepika Joshi
-  { id: '35', clientId: '8', name: 'Form 16 - Amazon India', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-09'), questionId: 'q1' },
-  { id: '36', clientId: '8', name: 'Trading Statement - Groww', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-10'), questionId: 'q2' },
-  { id: '37', clientId: '8', name: 'Capital Gains Report - Groww', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-10'), questionId: 'q2' },
-  { id: '38', clientId: '8', name: 'Dividend Statement', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-11') },
+  { id: '35', clientId: '8', name: 'Form 16 - Amazon India', type: 'income', status: 'complete', version: 1, uploadedAt: new Date('2024-01-09'), questionId: 'q1', url: demoFile },
+  { id: '36', clientId: '8', name: 'Trading Statement - Groww', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-10'), questionId: 'q2', url: demoFile },
+  { id: '37', clientId: '8', name: 'Capital Gains Report - Groww', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-10'), questionId: 'q2', url: demoFile },
+  { id: '38', clientId: '8', name: 'Dividend Statement', type: 'investment', status: 'complete', version: 1, uploadedAt: new Date('2024-01-11'), url: demoFile },
 ];
 
 export const mockPayments: Payment[] = [

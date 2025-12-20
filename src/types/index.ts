@@ -72,6 +72,7 @@ export interface Document {
   uploadedAt?: Date;
   notes?: string;
   questionId?: string; // Links document to specific questionnaire question
+  url?: string; // URL to the document file
 }
 
 export interface PersonalInfo {

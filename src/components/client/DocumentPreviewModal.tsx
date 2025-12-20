@@ -50,11 +50,21 @@ export function DocumentPreviewModal({ document, isOpen, onClose }: DocumentPrev
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => document.url && window.open(document.url, '_blank')}
+                disabled={!document.url}
+              >
                 <Download className="h-4 w-4 mr-2" />
                 Download
               </Button>
-              <Button variant="outline" size="sm">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => document.url && window.open(document.url, '_blank')}
+                disabled={!document.url}
+              >
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Open in New Tab
               </Button>
@@ -62,12 +72,22 @@ export function DocumentPreviewModal({ document, isOpen, onClose }: DocumentPrev
           </div>
         </DialogHeader>
 
-        <div className="flex-1 mt-4 rounded-lg border bg-muted/20 flex items-center justify-center min-h-[400px]">
-          <div className="text-center text-muted-foreground">
-            <FileText className="h-16 w-16 mx-auto mb-4 opacity-50" />
-            <p className="font-medium">Document Preview</p>
-            <p className="text-sm">Preview would display here for PDF/Image files</p>
-          </div>
+        <div className="flex-1 mt-4 rounded-lg border bg-muted/20 overflow-hidden min-h-[400px]">
+          {document.url ? (
+            <iframe 
+              src={document.url} 
+              className="w-full h-full min-h-[500px]"
+              title={`Preview of ${document.name}`}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-center text-muted-foreground">
+              <div>
+                <FileText className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                <p className="font-medium">Document Preview</p>
+                <p className="text-sm">Preview would display here for PDF/Image files</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {document.notes && (
