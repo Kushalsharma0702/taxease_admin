@@ -24,7 +24,6 @@ interface T1SectionCardProps {
   onRequestReupload: (docId: string, reason: string) => void;
   onRequestMissing: (docName: string, reason: string) => void;
   onViewDoc: (doc: DocType) => void;
-  onBulkRequestMissing: (category: string) => void;
   canEdit?: boolean;
 }
 
@@ -47,7 +46,6 @@ export function T1SectionCard({
   onRequestReupload,
   onRequestMissing,
   onViewDoc,
-  onBulkRequestMissing,
   canEdit = true,
 }: T1SectionCardProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -160,19 +158,8 @@ export function T1SectionCard({
               </div>
             )}
 
-            {/* Bulk Request & Collapse */}
+            {/* Collapse Button */}
             <div className="flex items-center gap-1">
-              {canEdit && stats.totalMissing > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onBulkRequestMissing(category)}
-                  className="h-8 text-xs"
-                >
-                  <Send className="h-3 w-3 mr-1" />
-                  Request All
-                </Button>
-              )}
               <Button
                 variant="ghost"
                 size="sm"

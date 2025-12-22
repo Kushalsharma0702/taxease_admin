@@ -90,6 +90,14 @@ export interface PersonalInfo {
     transitNumber: string;
     accountNumber: string;
   };
+  spouseInfo?: {
+    fullName?: string;
+    email?: string;
+    dateOfMarriage?: Date | string;
+    incomePastYear?: number;
+    sin?: string;
+    dateOfBirth?: Date | string;
+  };
 }
 
 export interface Payment {
@@ -100,6 +108,45 @@ export interface Payment {
   note?: string;
   createdAt: Date;
   createdBy: string;
+  status?: 'requested' | 'received' | 'pending';
+  isRequest?: boolean;
+}
+
+export interface PaymentRequest {
+  id: string;
+  clientId: string;
+  amount: number;
+  note?: string;
+  createdAt: Date;
+  createdBy: string;
+  status: 'pending' | 'received' | 'cancelled';
+}
+
+export interface TaxFile {
+  id: string;
+  clientId: string;
+  t1ReturnUrl?: string;
+  t183FormUrl?: string;
+  refundOrOwing: 'refund' | 'owing';
+  amount: number;
+  note?: string;
+  status: 'draft' | 'sent' | 'approved' | 'rejected';
+  createdAt: Date;
+  sentAt?: Date;
+  createdBy: string;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: 'document_request' | 'payment_request' | 'tax_file_approval' | 'payment_received' | 'status_update';
+  title: string;
+  message: string;
+  link?: string;
+  isRead: boolean;
+  createdAt: Date;
+  relatedEntityId?: string;
+  relatedEntityType?: 'client' | 'document' | 'payment' | 'tax_file';
 }
 
 export interface CostEstimate {

@@ -8,6 +8,7 @@ import { CopyableTable } from './CopyableTable';
 import { T1CRASection } from './T1CRASection';
 import { getT1FormData } from '@/data/mockT1FormData';
 import { useToast } from '@/hooks/use-toast';
+import { formatCurrency as formatCurrencyUtil, formatDate as formatDateUtil } from '@/lib/utils';
 import {
   Copy,
   Check,
@@ -37,23 +38,14 @@ interface T1CRAReadyFormProps {
   filingYear: number;
 }
 
-const formatCurrency = (value: number | undefined): string => {
-  if (value === undefined || value === null) return 'N/A';
-  return `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-};
-
+const formatCurrency = (value: number | undefined): string => formatCurrencyUtil(value);
 const formatPercentage = (value: number | undefined): string => {
   if (value === undefined || value === null) return 'N/A';
   return `${value}%`;
 };
-
 const formatDate = (value: string | undefined): string => {
   if (!value) return 'N/A';
-  return new Date(value).toLocaleDateString('en-IN', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  return formatDateUtil(new Date(value));
 };
 
 export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {

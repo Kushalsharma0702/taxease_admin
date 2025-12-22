@@ -66,6 +66,9 @@ export interface T1PersonalInfo {
     lastName: string;
     sin: string;
     dateOfBirth: string;
+    email?: string;
+    dateOfMarriage?: string;
+    incomePastYear?: number;
   };
   children?: Array<{
     firstName: string;
