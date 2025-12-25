@@ -81,33 +81,41 @@ export interface T1PersonalInfo {
 
 export interface T1ForeignProperty {
   id: string;
-  country: string;
-  propertyType: string;
   investmentDetails: string;
-  costAmount: number;
   grossIncome: number;
-  gainLoss: number;
+  gainLoss?: number;
+  maxCostDuringYear?: number;
+  costAmountAtYearEnd?: number;
+  country: string;
+  // Legacy fields for backward compat
+  propertyType?: string;
+  costAmount?: number;
 }
 
 export interface T1MedicalExpense {
   id: string;
   paymentDate: string;
   patientName: string;
-  relationship: string;
-  expenseType: string;
-  providerName: string;
+  paymentMadeTo?: string;
+  descriptionOfExpense?: string;
+  insuranceCovered?: number;
   amountPaid: number;
-  amountReimbursed: number;
-  netAmount: number;
+  // Legacy fields for backward compat
+  relationship?: string;
+  expenseType?: string;
+  providerName?: string;
+  amountReimbursed?: number;
+  netAmount?: number;
 }
 
 export interface T1CharitableDonation {
   id: string;
   organizationName: string;
-  registrationNumber: string;
-  donationDate: string;
   amountPaid: number;
-  receiptNumber: string;
+  // Legacy fields for backward compat
+  registrationNumber?: string;
+  donationDate?: string;
+  receiptNumber?: string;
 }
 
 export interface T1MovingExpenses {
@@ -350,66 +358,84 @@ export interface T1Tuition {
 
 export interface T1UnionDues {
   id: string;
-  unionName: string;
+  institutionName?: string;
   amountPaid: number;
+  // Legacy field for backward compat
+  unionName?: string;
 }
 
 export interface T1Childcare {
   id: string;
   providerName: string;
-  providerAddress: string;
-  providerSIN?: string;
-  childName: string;
-  childDOB: string;
   amountPaid: number;
-  periodFrom: string;
-  periodTo: string;
+  identificationNumberSIN?: string;
+  weeks?: number;
+  // Legacy fields for backward compat
+  providerAddress?: string;
+  providerSIN?: string;
+  childName?: string;
+  childDOB?: string;
+  periodFrom?: string;
+  periodTo?: string;
 }
 
 export interface T1FirstTimeFiler {
   dateOfLanding: string;
-  countryOfOrigin: string;
   incomeOutsideCanada: number;
-  taxPaidOutsideCanada: number;
-  assetsOutsideCanada: number;
+  backHomeIncome2024?: number;
+  backHomeIncome2023?: number;
+  // Legacy fields for backward compat
+  countryOfOrigin?: string;
+  taxPaidOutsideCanada?: number;
+  assetsOutsideCanada?: number;
 }
 
 export interface T1OtherIncome {
   id: string;
   description: string;
-  source: string;
   amount: number;
+  // Legacy field for backward compat
+  source?: string;
 }
 
 export interface T1ProfessionalDues {
   id: string;
   memberName: string;
   organizationName: string;
-  membershipType: string;
   amountPaid: number;
+  // Legacy fields for backward compat
+  membershipType?: string;
   examFees?: number;
   licenseFees?: number;
 }
 
 export interface T1ChildrenCredit {
   id: string;
-  childName: string;
-  childDOB: string;
-  activityType: 'arts' | 'sports' | 'both';
   instituteName: string;
-  programDescription: string;
+  description?: string;
   amountPaid: number;
+  // Legacy fields for backward compat
+  childName?: string;
+  childDOB?: string;
+  activityType?: 'arts' | 'sports' | 'both';
+  programDescription?: string;
 }
 
 export interface T1RentPropertyTax {
-  rentOrOwn: 'rent' | 'own';
+  id?: string;
+  rentOrPropertyTax?: string;
   propertyAddress: string;
-  province: string;
+  postalCode?: string;
+  numberOfMonthsResides?: number;
+  amountPaid?: number;
+  // Legacy fields for backward compat
+  rentOrOwn?: 'rent' | 'own';
+  province?: string;
   rentAmount?: number;
   propertyTaxAmount?: number;
   landlordName?: string;
   landlordAddress?: string;
-  occupancyCost: number;
+  occupancyCost?: number;
   ontarioEnergyCredit?: boolean;
   ontarioSalesTaxCredit?: boolean;
 }

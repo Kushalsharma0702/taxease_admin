@@ -261,6 +261,9 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
           columns={[
             { key: 'investmentDetails', header: 'Investment Details' },
             { key: 'grossIncome', header: 'Gross Income', format: (v) => formatCurrency(v as number) },
+            { key: 'gainLoss', header: 'Gain/Loss on sale', format: (v) => formatCurrency(v as number) },
+            { key: 'maxCostDuringYear', header: 'Maximum Cost during the year', format: (v) => formatCurrency(v as number) },
+            { key: 'costAmountAtYearEnd', header: 'Cost amount at the year end', format: (v) => formatCurrency(v as number) },
             { key: 'country', header: 'Country' },
           ]}
           data={formData.foreignProperty || []}
@@ -278,7 +281,10 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
           columns={[
             { key: 'paymentDate', header: 'Payment Date', format: (v) => formatDate(v as string) },
             { key: 'patientName', header: 'Patient Name' },
-            { key: 'amountPaid', header: 'Amount Paid', format: (v) => formatCurrency(v as number) },
+            { key: 'paymentMadeTo', header: 'PAYMENT MADE TO' },
+            { key: 'descriptionOfExpense', header: 'DESCRIPTION OF EXPENSE' },
+            { key: 'insuranceCovered', header: 'INSURANCE COVERED', format: (v) => formatCurrency(v as number) },
+            { key: 'amountPaid', header: 'Amount Paid from Pocket', format: (v) => formatCurrency(v as number) },
           ]}
           data={formData.medicalExpenses || []}
         />
@@ -685,12 +691,28 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
         sectionData={formData.workFromHome as unknown as Record<string, unknown>}
       >
         {formData.workFromHome && (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <CopyableField label="Total House Area (Sq.Ft.)" value={`${formData.workFromHome.totalHomeArea} sq ft`} />
-            <CopyableField label="Work Area (Sq.Ft.)" value={`${formData.workFromHome.workArea} sq ft`} />
-            <CopyableField label="Rent/Mortgage Expense" value={formatCurrency(formData.workFromHome.rentExpense || formData.workFromHome.mortgageInterest)} />
-            <CopyableField label="Utilities Expense" value={formatCurrency(formData.workFromHome.utilities)} />
-            <CopyableField label="Claimable Amount" value={formatCurrency(formData.workFromHome.claimableAmount)} />
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <CopyableField label="Total House Area (Sq.Ft.)" value={`${formData.workFromHome.totalHomeArea} sq ft`} />
+              <CopyableField label="Total Work Area (Sq.Ft.)" value={`${formData.workFromHome.workArea} sq ft`} />
+            </div>
+            <Separator />
+            <h4 className="font-medium text-sm text-muted-foreground">Expenses</h4>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <CopyableField label="Rent Expense" value={formatCurrency(formData.workFromHome.rentExpense)} />
+              <CopyableField label="Mortgage Expense" value={formatCurrency(formData.workFromHome.mortgageInterest)} />
+              <CopyableField label="Wifi Expense" value={formatCurrency(formData.workFromHome.internetExpense)} />
+              <CopyableField label="Electricity Expense" value={formatCurrency(formData.workFromHome.utilities)} />
+              <CopyableField label="Water Expense" value={formatCurrency(0)} />
+              <CopyableField label="Heat Expense" value={formatCurrency(0)} />
+              <CopyableField label="Total Insurance Expense" value={formatCurrency(formData.workFromHome.homeInsurance)} />
+            </div>
+            <div className="mt-4 p-3 rounded-lg bg-primary/10 border border-primary/20">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Claimable Amount</span>
+                <span className="text-lg font-bold text-primary">{formatCurrency(formData.workFromHome.claimableAmount)}</span>
+              </div>
+            </div>
           </div>
         )}
       </T1CRASection>
@@ -724,10 +746,10 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
       >
         <CopyableTable
           columns={[
-            { key: 'unionName', header: 'Institution Name' },
+            { key: 'institutionName', header: 'Institution Name', format: (v) => (v as string) || (formData.unionDues?.find(u => u.institutionName === v)?.unionName) || 'N/A' },
             { key: 'amountPaid', header: 'Amount', format: (v) => formatCurrency(v as number) },
           ]}
-          data={formData.unionDues || []}
+          data={(formData.unionDues || []).map(u => ({ ...u, institutionName: u.institutionName || u.unionName || 'N/A' }))}
         />
       </T1CRASection>
 
@@ -742,6 +764,8 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
           columns={[
             { key: 'providerName', header: 'Childcare Provider' },
             { key: 'amountPaid', header: 'Amount', format: (v) => formatCurrency(v as number) },
+            { key: 'identificationNumberSIN', header: 'Identification Number/SIN', format: (v) => (v as string) || 'N/A' },
+            { key: 'weeks', header: 'Weeks', format: (v) => (v as number)?.toString() || 'N/A' },
           ]}
           data={formData.childcare || []}
         />
@@ -755,9 +779,11 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
         sectionData={formData.firstTimeFiler as unknown as Record<string, unknown>}
       >
         {formData.firstTimeFiler && (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <CopyableField label="Date of Landing (Individual)" value={formatDate(formData.firstTimeFiler.dateOfLanding)} />
             <CopyableField label="Income Outside Canada (CAD)" value={formatCurrency(formData.firstTimeFiler.incomeOutsideCanada)} />
+            <CopyableField label="Back Home Income 2024 (in CAD)" value={formatCurrency(formData.firstTimeFiler.backHomeIncome2024)} />
+            <CopyableField label="Back Home Income 2023 (in CAD)" value={formatCurrency(formData.firstTimeFiler.backHomeIncome2023)} />
           </div>
         )}
       </T1CRASection>
@@ -820,22 +846,14 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
         applicable={!!formData.childrenCredits?.length}
         sectionData={formData.childrenCredits as unknown as Record<string, unknown>}
       >
-        {formData.childrenCredits?.map((credit, idx) => (
-          <div key={credit.id} className="mb-6 last:mb-0">
-            <h4 className="font-medium text-sm mb-3">Activity {idx + 1}</h4>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <CopyableField label="Child Name" value={credit.childName} />
-              <CopyableField label="Child Date of Birth" value={formatDate(credit.childDOB)} />
-              <CopyableField label="Activity Type" value={credit.activityType} />
-              <CopyableField label="Institute Name" value={credit.instituteName} />
-              <div className="sm:col-span-2">
-                <CopyableField label="Program Description" value={credit.programDescription} />
-              </div>
-              <CopyableField label="Amount Paid" value={formatCurrency(credit.amountPaid)} />
-            </div>
-            {idx < (formData.childrenCredits?.length || 0) - 1 && <Separator className="mt-6" />}
-          </div>
-        ))}
+        <CopyableTable
+          columns={[
+            { key: 'instituteName', header: 'Institute Name' },
+            { key: 'description', header: 'Description', format: (v) => (v as string) || (formData.childrenCredits?.find(c => c.description === v)?.programDescription) || 'N/A' },
+            { key: 'amountPaid', header: 'Amount', format: (v) => formatCurrency(v as number) },
+          ]}
+          data={(formData.childrenCredits || []).map(c => ({ ...c, description: c.description || c.programDescription || 'N/A' }))}
+        />
       </T1CRASection>
 
       {/* Q18: Rent or Property Tax (Ontario/Alberta/Quebec) */}
@@ -846,12 +864,14 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
         sectionData={formData.rentPropertyTax as unknown as Record<string, unknown>}
       >
         {formData.rentPropertyTax && (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <CopyableField label="Rent or Property Tax" value={formData.rentPropertyTax.rentOrOwn === 'rent' ? 'Rent' : 'Property Tax'} />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <CopyableField label="Rent or Property Tax" value={formData.rentPropertyTax.rentOrPropertyTax || (formData.rentPropertyTax.rentOrOwn === 'rent' ? 'Rent' : 'Property Tax')} />
             <div className="sm:col-span-2">
               <CopyableField label="Property Address" value={formData.rentPropertyTax.propertyAddress} />
             </div>
-            <CopyableField label="Amount Paid" value={formatCurrency(formData.rentPropertyTax.occupancyCost)} />
+            <CopyableField label="Postal Code" value={formData.rentPropertyTax.postalCode || 'N/A'} />
+            <CopyableField label="No. Of Months Resides" value={formData.rentPropertyTax.numberOfMonthsResides?.toString() || 'N/A'} />
+            <CopyableField label="Amount Paid" value={formatCurrency(formData.rentPropertyTax.amountPaid || formData.rentPropertyTax.occupancyCost)} />
           </div>
         )}
       </T1CRASection>
