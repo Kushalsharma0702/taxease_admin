@@ -230,3 +230,59 @@ export const DOCUMENT_SECTION_KEYS = {
 } as const;
 
 export type DocumentSectionKey = typeof DOCUMENT_SECTION_KEYS[keyof typeof DOCUMENT_SECTION_KEYS];
+
+/**
+ * Maps questionnaire categories to section keys
+ * This ensures Documents tab and Detailed Data tab show the same documents
+ */
+export const CATEGORY_TO_SECTION_KEY: Record<string, DocumentSectionKey> = {
+  'Employment Income': DOCUMENT_SECTION_KEYS.EMPLOYMENT,
+  'Investment Income': DOCUMENT_SECTION_KEYS.INVESTMENT,
+  'Foreign Property': DOCUMENT_SECTION_KEYS.FOREIGN_PROPERTY,
+  'Foreign Income': DOCUMENT_SECTION_KEYS.FOREIGN_PROPERTY,
+  'Medical Expenses': DOCUMENT_SECTION_KEYS.MEDICAL_EXPENSES,
+  'Charitable Donations': DOCUMENT_SECTION_KEYS.CHARITABLE_DONATIONS,
+  'Donations': DOCUMENT_SECTION_KEYS.CHARITABLE_DONATIONS,
+  'Moving Expenses': DOCUMENT_SECTION_KEYS.MOVING_EXPENSES,
+  'Self-Employment': DOCUMENT_SECTION_KEYS.SELF_EMPLOYMENT,
+  'Rental Income': DOCUMENT_SECTION_KEYS.RENTAL_INCOME,
+  'Capital Gains': DOCUMENT_SECTION_KEYS.CAPITAL_GAINS,
+  'Home Office': DOCUMENT_SECTION_KEYS.WORK_FROM_HOME,
+  'Work From Home': DOCUMENT_SECTION_KEYS.WORK_FROM_HOME,
+  'Tuition & Education': DOCUMENT_SECTION_KEYS.TUITION,
+  'Tuition': DOCUMENT_SECTION_KEYS.TUITION,
+  'Education': DOCUMENT_SECTION_KEYS.TUITION,
+  'Daycare Expenses': DOCUMENT_SECTION_KEYS.CHILDCARE,
+  'Childcare': DOCUMENT_SECTION_KEYS.CHILDCARE,
+  'Union Dues': DOCUMENT_SECTION_KEYS.UNION_DUES,
+  'Professional Dues': DOCUMENT_SECTION_KEYS.PROFESSIONAL_DUES,
+  'Disability': DOCUMENT_SECTION_KEYS.DISABILITY,
+  'First-Time Filer': DOCUMENT_SECTION_KEYS.FIRST_TIME_FILER,
+  'PPF/EPF Contributions': DOCUMENT_SECTION_KEYS.RRSP,
+  'RRSP Contributions': DOCUMENT_SECTION_KEYS.RRSP,
+  'Rent/Property Tax': DOCUMENT_SECTION_KEYS.RENT_PROPERTY_TAX,
+  'Home Loan': DOCUMENT_SECTION_KEYS.RENT_PROPERTY_TAX,
+};
+
+/**
+ * Get section key from document category or type
+ */
+export function getSectionKeyFromCategory(category: string): DocumentSectionKey | undefined {
+  return CATEGORY_TO_SECTION_KEY[category];
+}
+
+/**
+ * Get section key from document type
+ */
+export function getSectionKeyFromType(type: string): DocumentSectionKey | undefined {
+  const typeMapping: Record<string, DocumentSectionKey> = {
+    'income': DOCUMENT_SECTION_KEYS.EMPLOYMENT,
+    'investment': DOCUMENT_SECTION_KEYS.INVESTMENT,
+    'deduction': DOCUMENT_SECTION_KEYS.RRSP,
+    'medical': DOCUMENT_SECTION_KEYS.MEDICAL_EXPENSES,
+    'rental': DOCUMENT_SECTION_KEYS.RENTAL_INCOME,
+    'self_employment': DOCUMENT_SECTION_KEYS.SELF_EMPLOYMENT,
+    'tuition': DOCUMENT_SECTION_KEYS.TUITION,
+  };
+  return typeMapping[type];
+}

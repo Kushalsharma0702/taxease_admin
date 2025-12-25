@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { T1Question, Document as DocType } from '@/types';
 import { useState } from 'react';
+import { CATEGORY_TO_SECTION_KEY, DOCUMENT_SECTION_KEYS } from '@/lib/api/config';
 
 interface T1SectionCardProps {
   category: string;
@@ -38,6 +39,33 @@ const CATEGORY_ICONS: Record<string, string> = {
   'Tuition & Education': '🎓',
 };
 
+// Keywords to match documents to categories (same as QuestionDocuments for consistency)
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  'Medical Expenses': ['medical', 'hospital', 'health', 'pharmacy', 'doctor', 'medicine', 'clinic', 'fortis', 'apollo'],
+  'Charitable Donations': ['donation', 'charity', 'ngo', 'trust', 'pm cares', 'cry'],
+  'Donations': ['donation', 'charity', 'ngo', 'trust', 'pm cares', 'cry'],
+  'Moving Expenses': ['moving', 'relocation', 'transport'],
+  'Self-Employment': ['self-employment', 'freelance', 'consulting', 'invoice', 'business', 'gst'],
+  'Rental Income': ['rent', 'rental', 'tenant', 'property tax', 'landlord'],
+  'Capital Gains': ['capital gain', 'stock', 'trading', 'zerodha', 'groww', 'mutual fund', 'redemption'],
+  'Home Office': ['work from home', 't2200', 'home office'],
+  'Work From Home': ['work from home', 't2200', 'home office'],
+  'Tuition & Education': ['tuition', 't2202', 'education', 'school', 'college', 'university'],
+  'Tuition': ['tuition', 't2202', 'education', 'school', 'college', 'university'],
+  'Education': ['tuition', 't2202', 'education', 'school', 'college', 'university'],
+  'Daycare Expenses': ['daycare', 'childcare', 'babysitter', 'child care'],
+  'Union Dues': ['union', 'dues'],
+  'Professional Dues': ['professional', 'license', 'certification', 'membership'],
+  'Disability': ['disability', 'dtc'],
+  'PPF/EPF Contributions': ['rrsp', 'fhsa', 'ppf', 'epf', 'nps', 'lic', 'insurance premium', 'home loan'],
+  'RRSP Contributions': ['rrsp', 'fhsa', 'ppf', 'epf', 'nps', 'lic', 'insurance premium'],
+  'Investment Income': ['investment', 'fd', 'dividend', 'interest certificate', 'mutual fund statement'],
+  'Foreign Income': ['foreign', 'us income', 'dtaa', 'overseas'],
+  'Foreign Property': ['foreign', 'us income', 'dtaa', 'overseas'],
+  'Employment Income': ['form 16', 'salary', 'employment', 'employer'],
+  'Home Loan': ['home loan', 'housing loan', 'mortgage', 'principal'],
+};
+
 export function T1SectionCard({
   category,
   questions,
@@ -50,8 +78,26 @@ export function T1SectionCard({
 }: T1SectionCardProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  const getDocsForQuestion = (questionId: string) => {
-    return documents.filter((d) => d.questionId === questionId);
+  // Get documents for a question - match by questionId, sectionKey, or keywords
+  const getDocsForQuestion = (questionId: string, questionCategory?: string) => {
+    const keywords = CATEGORY_KEYWORDS[questionCategory || category] || [];
+    const sectionKey = CATEGORY_TO_SECTION_KEY[questionCategory || category];
+    
+    return documents.filter((d) => {
+      // Match by questionId
+      if (d.questionId === questionId) return true;
+      
+      // Match by sectionKey
+      if (sectionKey && d.sectionKey === sectionKey) return true;
+      
+      // Match by keywords in document name
+      const docNameLower = d.name.toLowerCase();
+      if (keywords.some(keyword => docNameLower.includes(keyword.toLowerCase()))) {
+        return true;
+      }
+      
+      return false;
+    });
   };
 
   const stats = useMemo(() => {
@@ -64,7 +110,7 @@ export function T1SectionCard({
     questions.forEach((q) => {
       if (q.answer === 'yes') {
         totalRequired += q.requiredDocuments.length;
-        const docs = getDocsForQuestion(q.id);
+        const docs = getDocsForQuestion(q.id, q.category);
         docs.forEach((d) => {
           totalUploaded++;
           if (d.status === 'approved') totalApproved++;
@@ -176,7 +222,7 @@ export function T1SectionCard({
       {!isCollapsed && (
         <CardContent className="space-y-4 pt-0">
           {questions.map((question, qIndex) => {
-            const docs = getDocsForQuestion(question.id);
+            const docs = getDocsForQuestion(question.id, question.category);
             const showDocs = question.answer === 'yes' && question.requiredDocuments.length > 0;
 
             return (

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { Document as DocType, DocumentStatus } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { DOCUMENT_SECTION_KEYS } from '@/lib/api/config';
+import { DOCUMENT_SECTION_KEYS, CATEGORY_TO_SECTION_KEY, DocumentSectionKey } from '@/lib/api/config';
 
 interface QuestionDocumentsProps {
   sectionKey: keyof typeof DOCUMENT_SECTION_KEYS;
@@ -46,6 +46,25 @@ const STATUS_CONFIG: Record<DocumentStatus, { label: string; className: string; 
   reupload_requested: { label: 'Re-upload Requested', className: 'bg-orange-500/10 text-orange-600 border-orange-500/30', icon: '🔁' },
 };
 
+// Keywords to match documents to sections
+const SECTION_KEYWORDS: Record<string, string[]> = {
+  [DOCUMENT_SECTION_KEYS.MEDICAL_EXPENSES]: ['medical', 'hospital', 'health', 'pharmacy', 'doctor', 'medicine', 'clinic', 'fortis', 'apollo'],
+  [DOCUMENT_SECTION_KEYS.CHARITABLE_DONATIONS]: ['donation', 'charity', 'ngo', 'trust', 'pm cares', 'cry'],
+  [DOCUMENT_SECTION_KEYS.MOVING_EXPENSES]: ['moving', 'relocation', 'transport'],
+  [DOCUMENT_SECTION_KEYS.SELF_EMPLOYMENT]: ['self-employment', 'freelance', 'consulting', 'invoice', 'business', 'gst'],
+  [DOCUMENT_SECTION_KEYS.RENTAL_INCOME]: ['rent', 'rental', 'tenant', 'property tax', 'landlord'],
+  [DOCUMENT_SECTION_KEYS.CAPITAL_GAINS]: ['capital gain', 'stock', 'trading', 'zerodha', 'groww', 'mutual fund', 'redemption'],
+  [DOCUMENT_SECTION_KEYS.WORK_FROM_HOME]: ['work from home', 't2200', 'home office'],
+  [DOCUMENT_SECTION_KEYS.TUITION]: ['tuition', 't2202', 'education', 'school', 'college', 'university'],
+  [DOCUMENT_SECTION_KEYS.CHILDCARE]: ['daycare', 'childcare', 'babysitter', 'child care'],
+  [DOCUMENT_SECTION_KEYS.UNION_DUES]: ['union', 'dues'],
+  [DOCUMENT_SECTION_KEYS.PROFESSIONAL_DUES]: ['professional', 'license', 'certification', 'membership'],
+  [DOCUMENT_SECTION_KEYS.DISABILITY]: ['disability', 'dtc'],
+  [DOCUMENT_SECTION_KEYS.RRSP]: ['rrsp', 'fhsa', 'ppf', 'epf', 'nps', 'lic', 'insurance premium', 'home loan'],
+  [DOCUMENT_SECTION_KEYS.INVESTMENT]: ['investment', 'fd', 'dividend', 'interest certificate', 'mutual fund statement'],
+  [DOCUMENT_SECTION_KEYS.FOREIGN_PROPERTY]: ['foreign', 'us income', 'dtaa', 'overseas'],
+};
+
 export function QuestionDocuments({
   sectionKey,
   sectionTitle,
@@ -65,9 +84,30 @@ export function QuestionDocuments({
   const [reason, setReason] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Get documents for this section
+  // Get documents for this section using multiple matching strategies
   const sectionKeyValue = DOCUMENT_SECTION_KEYS[sectionKey];
-  const sectionDocs = documents.filter(d => d.sectionKey === sectionKeyValue);
+  
+  const sectionDocs = useMemo(() => {
+    const keywords = SECTION_KEYWORDS[sectionKeyValue] || [];
+    
+    return documents.filter(d => {
+      // Match by explicit sectionKey
+      if (d.sectionKey === sectionKeyValue) return true;
+      
+      // Match by document name containing section keywords
+      const docNameLower = d.name.toLowerCase();
+      if (keywords.some(keyword => docNameLower.includes(keyword.toLowerCase()))) {
+        return true;
+      }
+      
+      // Match by document type
+      if (d.type && keywords.some(keyword => d.type?.toLowerCase().includes(keyword.toLowerCase()))) {
+        return true;
+      }
+      
+      return false;
+    });
+  }, [documents, sectionKeyValue]);
 
   // If no documents and no required documents, don't show the section
   if (sectionDocs.length === 0 && requiredDocuments.length === 0) {
