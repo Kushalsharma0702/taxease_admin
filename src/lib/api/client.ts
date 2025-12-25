@@ -85,6 +85,12 @@ class ApiClient {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+
+    // Admin APIs may require a server-side session id (Redis-backed) in addition to JWT
+    const sessionId = this.getSessionId();
+    if (sessionId) {
+      headers['X-Session-ID'] = sessionId;
+    }
     
     return headers;
   }

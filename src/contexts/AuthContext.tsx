@@ -14,12 +14,15 @@ interface AuthContextType {
 
 interface AdminLoginResponse {
   user: {
-    user_id: string;
+    // Backend may return either `user_id` (docs) or `id` (current impl)
+    user_id?: string;
+    id?: string;
     email: string;
     name: string;
     role: string;
     permissions: string[];
     is_active?: boolean;
+    isActive?: boolean;
   };
   token: {
     access_token: string;
@@ -97,12 +100,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (response.data) {
               // Update user data if needed
               const updatedUser: User = {
-                id: response.data.user_id,
+                id: response.data.user_id || response.data.id || '',
                 email: response.data.email,
                 name: response.data.name,
                 role: mapRole(response.data.role),
                 permissions: mapPermissions(response.data.permissions || [], response.data.role),
-                isActive: response.data.is_active !== false,
+                isActive: (response.data.is_active ?? response.data.isActive) !== false,
                 createdAt: new Date(),
               };
               setUser(updatedUser);
@@ -154,12 +157,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         // Create user object
         const loggedInUser: User = {
-          id: userData.user_id,
+          id: userData.user_id || userData.id || '',
           email: userData.email,
           name: userData.name,
           role: mapRole(userData.role),
           permissions: mapPermissions(userData.permissions || [], userData.role),
-          isActive: userData.is_active !== false,
+          isActive: (userData.is_active ?? userData.isActive) !== false,
           createdAt: new Date(),
         };
         
