@@ -147,24 +147,25 @@ export function TourOverlay() {
         ref={tooltipRef}
         className={cn(
           "absolute pointer-events-auto transition-all duration-500 ease-out",
+          "w-[calc(100vw-32px)] sm:w-auto",
           isAnimating ? "opacity-0 scale-95" : "opacity-100 scale-100"
         )}
         style={{
           top: tooltipPosition.top,
           left: tooltipPosition.left,
-          maxWidth: '380px',
-          minWidth: '320px',
+          maxWidth: 'min(380px, calc(100vw - 32px))',
+          minWidth: 'min(320px, calc(100vw - 32px))',
         }}
       >
         <Card className="bg-card border-border shadow-2xl overflow-hidden">
           {/* Header with gradient */}
-          <div className="bg-gradient-to-r from-primary/20 to-primary/5 px-4 py-3 border-b border-border">
+          <div className="bg-gradient-to-r from-primary/20 to-primary/5 px-3 sm:px-4 py-2 sm:py-3 border-b border-border">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
-                  <Sparkles className="h-4 w-4 text-primary" />
+                <div className="h-6 w-6 sm:h-8 sm:w-8 rounded-full bg-primary/20 flex items-center justify-center">
+                  <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                 </div>
-                <span className="text-xs font-medium text-muted-foreground">
+                <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">
                   Step {currentStep + 1} of {steps.length}
                 </span>
               </div>
@@ -180,17 +181,17 @@ export function TourOverlay() {
           </div>
 
           {/* Content */}
-          <div className="p-4">
-            <h3 className="text-lg font-semibold text-foreground mb-2">
+          <div className="p-3 sm:p-4">
+            <h3 className="text-base sm:text-lg font-semibold text-foreground mb-1 sm:mb-2">
               {currentTourStep.title}
             </h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
               {currentTourStep.description}
             </p>
           </div>
 
           {/* Progress bar */}
-          <div className="px-4 pb-2">
+          <div className="px-3 sm:px-4 pb-2">
             <div className="h-1 bg-muted rounded-full overflow-hidden">
               <div
                 className="h-full bg-primary transition-all duration-500 ease-out rounded-full"
@@ -200,19 +201,21 @@ export function TourOverlay() {
           </div>
 
           {/* Navigation */}
-          <div className="flex items-center justify-between p-4 pt-2 border-t border-border/50">
+          <div className="flex items-center justify-between p-3 sm:p-4 pt-2 border-t border-border/50 gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={prevStep}
               disabled={currentStep === 0}
-              className="gap-1"
+              className="gap-1 text-xs sm:text-sm px-2 sm:px-3"
             >
-              <ChevronLeft className="h-4 w-4" />
-              Previous
+              <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Previous</span>
+              <span className="xs:hidden">Prev</span>
             </Button>
 
-            <div className="flex items-center gap-1">
+            {/* Step dots - hidden on very small screens */}
+            <div className="hidden sm:flex items-center gap-1">
               {steps.map((_, index) => (
                 <button
                   key={index}
@@ -229,18 +232,35 @@ export function TourOverlay() {
               ))}
             </div>
 
+            {/* Mobile step indicator */}
+            <span className="sm:hidden text-[10px] text-muted-foreground">
+              {currentStep + 1}/{steps.length}
+            </span>
+
             <Button
               size="sm"
               onClick={nextStep}
-              className="gap-1"
+              className="gap-1 text-xs sm:text-sm px-2 sm:px-3"
             >
               {currentStep === steps.length - 1 ? 'Finish' : 'Next'}
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           </div>
 
-          {/* Keyboard hint */}
-          <div className="px-4 pb-3">
+          {/* Skip Tour Button */}
+          <div className="px-3 sm:px-4 pb-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={endTour}
+              className="w-full text-xs text-muted-foreground hover:text-foreground"
+            >
+              Skip Tour
+            </Button>
+          </div>
+
+          {/* Keyboard hint - hidden on mobile */}
+          <div className="hidden sm:block px-4 pb-3">
             <p className="text-[10px] text-muted-foreground text-center">
               Use <kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">←</kbd> <kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">→</kbd> arrow keys to navigate • <kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">Esc</kbd> to exit
             </p>
