@@ -21,9 +21,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { mockPayments, mockClients } from '@/data/mockData';
+import { usePayments, useClients, useCreatePayment } from '@/hooks/useApiData';
 import { Payment, PERMISSIONS } from '@/types';
-import { CreditCard, Plus, DollarSign, TrendingUp, Download } from 'lucide-react';
+import { CreditCard, Plus, DollarSign, TrendingUp, Download, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -31,7 +31,6 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 export default function Payments() {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
-  const [payments, setPayments] = useState(mockPayments);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newPayment, setNewPayment] = useState({
     clientId: '',
@@ -40,22 +39,27 @@ export default function Payments() {
     note: '',
   });
 
+  // API hooks
+  const { data: payments = [], isLoading: paymentsLoading } = usePayments();
+  const { data: clients = [] } = useClients();
+  const createPaymentMutation = useCreatePayment();
+
   const paymentsWithClient = payments.map((payment) => {
-    const client = mockClients.find((c) => c.id === payment.clientId);
+    const client = clients.find((c) => c.id === payment.clientId);
     return { ...payment, clientName: client?.name || 'Unknown' };
   });
 
   const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
   const avgPayment = payments.length > 0 ? totalRevenue / payments.length : 0;
 
-  const monthlyData = [
-    { month: 'Jan', amount: 2400 },
-    { month: 'Feb', amount: 1800 },
-    { month: 'Mar', amount: 3200 },
-    { month: 'Apr', amount: 2800 },
-    { month: 'May', amount: 1900 },
-    { month: 'Jun', amount: 2100 },
-  ];
+  // Group payments by month for chart
+  const monthlyData = payments.reduce((acc: Record<string, number>, p) => {
+    const month = p.createdAt.toLocaleString('default', { month: 'short' });
+    acc[month] = (acc[month] || 0) + p.amount;
+    return acc;
+  }, {});
+  
+  const chartData = Object.entries(monthlyData).map(([month, amount]) => ({ month, amount }));
 
   const columns = [
     {
@@ -87,7 +91,7 @@ export default function Payments() {
     },
   ];
 
-  const handleAddPayment = () => {
+  const handleAddPayment = async () => {
     if (!newPayment.clientId || !newPayment.amount) {
       toast({
         title: 'Validation Error',
@@ -97,23 +101,28 @@ export default function Payments() {
       return;
     }
 
-    const payment: Payment = {
-      id: String(payments.length + 1),
-      clientId: newPayment.clientId,
-      amount: parseFloat(newPayment.amount),
-      method: newPayment.method === 'etransfer' ? 'E-Transfer' : newPayment.method === 'credit' ? 'Credit Card' : 'Debit',
-      note: newPayment.note,
-      createdAt: new Date(),
-      createdBy: 'Current User',
-    };
-
-    setPayments([payment, ...payments]);
-    setNewPayment({ clientId: '', amount: '', method: 'etransfer', note: '' });
-    setIsAddOpen(false);
-    toast({
-      title: 'Payment Added',
-      description: `Payment of $${payment.amount} has been recorded.`,
-    });
+    try {
+      await createPaymentMutation.mutateAsync({
+        client_id: newPayment.clientId,
+        amount: parseFloat(newPayment.amount),
+        method: newPayment.method === 'etransfer' ? 'E-Transfer' : newPayment.method === 'credit' ? 'Credit Card' : 'Debit',
+        note: newPayment.note,
+        is_request: false,
+      });
+      
+      setNewPayment({ clientId: '', amount: '', method: 'etransfer', note: '' });
+      setIsAddOpen(false);
+      toast({
+        title: 'Payment Added',
+        description: `Payment of $${newPayment.amount} has been recorded.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to record payment. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -122,6 +131,11 @@ export default function Payments() {
       breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Payments' }]}
     >
       <div className="space-y-6">
+        {paymentsLoading && (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        )}
         {/* Stats */}
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
@@ -172,21 +186,27 @@ export default function Payments() {
           </CardHeader>
           <CardContent>
             <div className="h-[250px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="month" className="text-xs" />
-                  <YAxis className="text-xs" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Bar dataKey="amount" fill="hsl(200, 98%, 39%)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="month" className="text-xs" />
+                    <YAxis className="text-xs" />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                    />
+                    <Bar dataKey="amount" fill="hsl(200, 98%, 39%)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  No payment data available
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -225,7 +245,7 @@ export default function Payments() {
                           <SelectValue placeholder="Select client" />
                         </SelectTrigger>
                         <SelectContent>
-                          {mockClients.map((client) => (
+                          {clients.map((client) => (
                             <SelectItem key={client.id} value={client.id}>
                               {client.name}
                             </SelectItem>
@@ -271,7 +291,10 @@ export default function Payments() {
                     <Button variant="outline" onClick={() => setIsAddOpen(false)}>
                       Cancel
                     </Button>
-                    <Button onClick={handleAddPayment}>Record Payment</Button>
+                    <Button onClick={handleAddPayment} disabled={createPaymentMutation.isPending}>
+                      {createPaymentMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                      Record Payment
+                    </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>

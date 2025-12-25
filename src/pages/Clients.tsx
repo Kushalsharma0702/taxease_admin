@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DataTable } from '@/components/ui/data-table';
@@ -32,8 +32,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
-import { mockClients } from '@/data/mockData';
-import { Client, STATUS_LABELS, ClientStatus } from '@/types';
+import { useClients, useCreateClient, useDeleteClient, useUpdateClient } from '@/hooks/useApiData';
+import { Client, STATUS_LABELS } from '@/types';
 import { Plus, Download, Trash2, Edit, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -42,16 +42,24 @@ export default function Clients() {
   const navigate = useNavigate();
   const { hasPermission } = useAuth();
   const { toast } = useToast();
-  const [clients, setClients] = useState(mockClients);
+  
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [yearFilter, setYearFilter] = useState<string>('all');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [newClient, setNewClient] = useState({ name: '', email: '', phone: '' });
   const [editClient, setEditClient] = useState({ name: '', email: '', phone: '' });
+
+  // API hooks
+  const { data: clients = [], isLoading, refetch } = useClients({
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    year: yearFilter !== 'all' ? parseInt(yearFilter) : undefined,
+  });
+  const createClientMutation = useCreateClient();
+  const updateClientMutation = useUpdateClient();
+  const deleteClientMutation = useDeleteClient();
 
   const filteredClients = clients.filter((client) => {
     if (statusFilter !== 'all' && client.status !== statusFilter) return false;
@@ -150,31 +158,31 @@ export default function Clients() {
       return;
     }
 
-    setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const [first_name, ...lastParts] = newClient.name.split(' ');
+    const last_name = lastParts.join(' ') || first_name;
 
-    const client: Client = {
-      id: String(Date.now()),
-      name: newClient.name,
-      email: newClient.email,
-      phone: newClient.phone,
-      filingYear: new Date().getFullYear(),
-      status: 'documents_pending',
-      paymentStatus: 'pending',
-      totalAmount: 0,
-      paidAmount: 0,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    setClients([client, ...clients]);
-    setNewClient({ name: '', email: '', phone: '' });
-    setIsAddOpen(false);
-    setIsLoading(false);
-    toast({
-      title: 'Client Added',
-      description: `${client.name} has been added successfully.`,
-    });
+    try {
+      await createClientMutation.mutateAsync({
+        email: newClient.email,
+        first_name,
+        last_name,
+        phone: newClient.phone,
+        password: 'TempPass123!', // Backend may require password
+      });
+      
+      setNewClient({ name: '', email: '', phone: '' });
+      setIsAddOpen(false);
+      toast({
+        title: 'Client Added',
+        description: `${newClient.name} has been added successfully.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to add client. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleEditClient = async () => {
@@ -187,38 +195,46 @@ export default function Clients() {
       return;
     }
 
-    setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    setClients(prev => prev.map(c => 
-      c.id === selectedClient.id 
-        ? { ...c, name: editClient.name, email: editClient.email, phone: editClient.phone, updatedAt: new Date() }
-        : c
-    ));
-    
-    setIsEditOpen(false);
-    setSelectedClient(null);
-    setIsLoading(false);
-    toast({
-      title: 'Client Updated',
-      description: `${editClient.name}'s information has been updated.`,
-    });
+    try {
+      await updateClientMutation.mutateAsync({
+        id: selectedClient.id,
+        data: { name: editClient.name, email: editClient.email, phone: editClient.phone },
+      });
+      
+      setIsEditOpen(false);
+      setSelectedClient(null);
+      toast({
+        title: 'Client Updated',
+        description: `${editClient.name}'s information has been updated.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update client. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleDeleteClient = async () => {
     if (!selectedClient) return;
 
-    setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    setClients(prev => prev.filter(c => c.id !== selectedClient.id));
-    setIsDeleteOpen(false);
-    setIsLoading(false);
-    toast({
-      title: 'Client Deleted',
-      description: `${selectedClient.name} has been removed from the system.`,
-    });
-    setSelectedClient(null);
+    try {
+      await deleteClientMutation.mutateAsync(selectedClient.id);
+      
+      setIsDeleteOpen(false);
+      setSelectedClient(null);
+      toast({
+        title: 'Client Deleted',
+        description: `${selectedClient.name} has been removed from the system.`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete client. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -308,8 +324,8 @@ export default function Clients() {
                     <Button variant="outline" onClick={() => setIsAddOpen(false)}>
                       Cancel
                     </Button>
-                    <Button onClick={handleAddClient} disabled={isLoading}>
-                      {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    <Button onClick={handleAddClient} disabled={createClientMutation.isPending}>
+                      {createClientMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                       Add Client
                     </Button>
                   </DialogFooter>
@@ -390,8 +406,8 @@ export default function Clients() {
               <Button variant="outline" onClick={() => setIsEditOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleEditClient} disabled={isLoading}>
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              <Button onClick={handleEditClient} disabled={updateClientMutation.isPending}>
+                {updateClientMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Save Changes
               </Button>
             </DialogFooter>
@@ -413,7 +429,7 @@ export default function Clients() {
                 onClick={handleDeleteClient}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                {deleteClientMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Delete
               </AlertDialogAction>
             </AlertDialogFooter>

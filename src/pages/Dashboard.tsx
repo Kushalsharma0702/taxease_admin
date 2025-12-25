@@ -3,8 +3,8 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAnalyticsData, mockClients } from '@/data/mockData';
-import { Users, FileText, CreditCard, CheckCircle, DollarSign, UserCog } from 'lucide-react';
+import { useAnalytics, useClients } from '@/hooks/useApiData';
+import { Users, FileText, CreditCard, CheckCircle, DollarSign, UserCog, Loader2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,8 @@ const COLORS = ['hsl(200, 98%, 39%)', 'hsl(213, 93%, 67%)', 'hsl(215, 20%, 65%)'
 
 export default function Dashboard() {
   const { user, isSuperAdmin } = useAuth();
-  const analytics = getAnalyticsData();
+  const { data: analytics, isLoading: analyticsLoading } = useAnalytics();
+  const { data: clients = [], isLoading: clientsLoading } = useClients();
   const navigate = useNavigate();
   const { setSteps, startTour, hasCompletedTour, steps } = useTour();
 
@@ -36,7 +37,8 @@ export default function Dashboard() {
     }
   }, [hasCompletedTour, steps.length, startTour]);
 
-  const recentClients = mockClients.slice(0, 5);
+  const recentClients = clients.slice(0, 5);
+  const isLoading = analyticsLoading || clientsLoading;
 
   return (
     <DashboardLayout
@@ -44,27 +46,33 @@ export default function Dashboard() {
       breadcrumbs={[{ label: 'Dashboard' }]}
     >
       <div className="space-y-6">
+        {isLoading && (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        )}
+        
         {/* Stats Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="Total Clients"
-            value={analytics.totalClients}
+            value={analytics?.totalClients ?? 0}
             icon={Users}
             trend={{ value: 12, isPositive: true }}
           />
           <StatCard
             title="Pending Documents"
-            value={analytics.pendingDocuments}
+            value={analytics?.pendingDocuments ?? 0}
             icon={FileText}
           />
           <StatCard
             title="Pending Payments"
-            value={analytics.pendingPayments}
+            value={analytics?.pendingPayments ?? 0}
             icon={CreditCard}
           />
           <StatCard
             title="Completed Filings"
-            value={analytics.completedFilings}
+            value={analytics?.completedFilings ?? 0}
             icon={CheckCircle}
           />
         </div>
@@ -73,13 +81,13 @@ export default function Dashboard() {
           <div className="grid gap-4 md:grid-cols-2">
             <StatCard
               title="Total Revenue"
-              value={`$${analytics.totalRevenue.toLocaleString()}`}
+              value={`$${(analytics?.totalRevenue ?? 0).toLocaleString()}`}
               icon={DollarSign}
               trend={{ value: 8, isPositive: true }}
             />
             <StatCard
               title="Total Admins"
-              value={analytics.totalAdmins}
+              value={analytics?.totalAdmins ?? 0}
               icon={UserCog}
             />
           </div>
@@ -95,7 +103,7 @@ export default function Dashboard() {
             <CardContent>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analytics.monthlyRevenue}>
+                  <BarChart data={analytics?.monthlyRevenue || []}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="month" className="text-xs" />
                     <YAxis className="text-xs" />
@@ -123,7 +131,7 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={analytics.clientsByStatus}
+                      data={analytics?.clientsByStatus || []}
                       cx="50%"
                       cy="50%"
                       innerRadius={60}
@@ -134,7 +142,7 @@ export default function Dashboard() {
                       label={({ status, count }) => `${status}: ${count}`}
                       labelLine={false}
                     >
-                      {analytics.clientsByStatus.map((entry, index) => (
+                      {(analytics?.clientsByStatus || []).map((_, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
@@ -156,7 +164,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {analytics.adminWorkload.map((admin, i) => (
+                  {(analytics?.adminWorkload || []).map((admin, i) => (
                     <div key={i} className="flex items-center justify-between">
                       <span className="text-sm font-medium">{admin.name}</span>
                       <div className="flex items-center gap-3">

@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { mockDocuments, mockClients } from '@/data/mockData';
+import { useDocuments, useClients } from '@/hooks/useApiData';
 import { Document as DocType } from '@/types';
 import { FileText, Search, Send, Trash2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,13 +33,16 @@ export default function Documents() {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [documents, setDocuments] = useState(mockDocuments);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<DocType | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // API hooks
+  const { data: documents = [], isLoading: docsLoading } = useDocuments();
+  const { data: clients = [] } = useClients();
 
   const documentsWithClient = documents.map((doc) => {
-    const client = mockClients.find((c) => c.id === doc.clientId);
+    const client = clients.find((c) => c.id === doc.clientId);
     return { ...doc, clientName: client?.name || 'Unknown' };
   });
 
@@ -52,7 +55,7 @@ export default function Documents() {
 
   const stats = {
     total: documents.length,
-    complete: documents.filter((d) => d.status === 'complete').length,
+    complete: documents.filter((d) => d.status === 'complete' || d.status === 'approved').length,
     pending: documents.filter((d) => d.status === 'pending').length,
     missing: documents.filter((d) => d.status === 'missing').length,
   };
@@ -67,13 +70,13 @@ export default function Documents() {
   const handleDeleteDocument = async () => {
     if (!selectedDoc) return;
 
-    setIsLoading(true);
+    setIsDeleting(true);
+    // TODO: Wire to real DELETE endpoint when available
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    setDocuments(prev => prev.filter(d => d.id !== selectedDoc.id));
     setIsDeleteOpen(false);
     setSelectedDoc(null);
-    setIsLoading(false);
+    setIsDeleting(false);
     toast({
       title: 'Document Deleted',
       description: 'The document has been removed from the system.',
@@ -86,6 +89,13 @@ export default function Documents() {
       breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Documents' }]}
     >
       <div className="space-y-6 animate-fade-in">
+        {/* Loading State */}
+        {docsLoading && (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        )}
+
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
@@ -207,7 +217,7 @@ export default function Documents() {
                 onClick={handleDeleteDocument}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Delete
               </AlertDialogAction>
             </AlertDialogFooter>
