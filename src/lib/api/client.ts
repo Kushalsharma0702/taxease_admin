@@ -80,18 +80,12 @@ class ApiClient {
       'Accept': 'application/json',
       'ngrok-skip-browser-warning': 'true', // Skip ngrok browser warning
     };
-
+    
     const token = this.getAuthToken();
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-
-    const sessionId = this.getSessionId();
-    if (sessionId) {
-      // Some backends use a session id header for Redis-based session revocation.
-      headers['X-Session-ID'] = sessionId;
-    }
-
+    
     return headers;
   }
 
