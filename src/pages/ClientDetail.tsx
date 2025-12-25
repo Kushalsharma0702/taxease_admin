@@ -663,7 +663,16 @@ export default function ClientDetail() {
 
           {/* T1 CRA Ready Form Tab */}
           <TabsContent value="cra-form" className="mt-6 animate-fade-in">
-            <T1CRAReadyForm clientId={client.id} filingYear={client.filingYear} />
+            <T1CRAReadyForm 
+              clientId={client.id} 
+              filingYear={client.filingYear}
+              documents={documents}
+              onApproveDoc={handleApproveDocument}
+              onRequestReupload={handleRequestReupload}
+              onRequestMissing={handleRequestDocument}
+              onViewDoc={handleViewDocument}
+              canEdit={hasPermission(PERMISSIONS.REQUEST_DOCUMENTS)}
+            />
           </TabsContent>
 
           {/* T1 Questionnaire Tab - Redesigned with Inline Documents */}

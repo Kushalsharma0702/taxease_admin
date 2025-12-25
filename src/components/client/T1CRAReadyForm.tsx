@@ -6,9 +6,12 @@ import { Separator } from '@/components/ui/separator';
 import { CopyableField } from './CopyableField';
 import { CopyableTable } from './CopyableTable';
 import { T1CRASection } from './T1CRASection';
+import { QuestionDocuments } from './QuestionDocuments';
 import { getT1FormData } from '@/data/mockT1FormData';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency as formatCurrencyUtil, formatDate as formatDateUtil } from '@/lib/utils';
+import { Document as DocType } from '@/types';
+import { DOCUMENT_SECTION_KEYS } from '@/lib/api/config';
 import {
   Copy,
   Check,
@@ -36,6 +39,12 @@ import {
 interface T1CRAReadyFormProps {
   clientId: string;
   filingYear: number;
+  documents?: DocType[];
+  onApproveDoc?: (docId: string) => void;
+  onRequestReupload?: (docId: string, reason: string) => void;
+  onRequestMissing?: (docName: string, reason: string) => void;
+  onViewDoc?: (doc: DocType) => void;
+  canEdit?: boolean;
 }
 
 const formatCurrency = (value: number | undefined): string => formatCurrencyUtil(value);
@@ -48,7 +57,16 @@ const formatDate = (value: string | undefined): string => {
   return formatDateUtil(new Date(value));
 };
 
-export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
+export function T1CRAReadyForm({ 
+  clientId, 
+  filingYear,
+  documents = [],
+  onApproveDoc,
+  onRequestReupload,
+  onRequestMissing,
+  onViewDoc,
+  canEdit = true,
+}: T1CRAReadyFormProps) {
   const [copiedSummary, setCopiedSummary] = useState(false);
   const { toast } = useToast();
 
@@ -268,6 +286,16 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
           ]}
           data={formData.foreignProperty || []}
         />
+        <QuestionDocuments
+          sectionKey="FOREIGN_PROPERTY"
+          sectionTitle="Foreign Property Documents"
+          documents={documents}
+          onApprove={onApproveDoc}
+          onRequestReupload={onRequestReupload}
+          onRequestMissing={onRequestMissing}
+          onView={onViewDoc}
+          canEdit={canEdit}
+        />
       </T1CRASection>
 
       {/* Q2: Medical Expenses */}
@@ -294,6 +322,17 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
             <span className="text-lg font-bold text-primary">{formatCurrency(totalMedical)}</span>
           </div>
         </div>
+        <QuestionDocuments
+          sectionKey="MEDICAL_EXPENSES"
+          sectionTitle="Medical Expense Documents"
+          documents={documents}
+          requiredDocuments={['Medical Receipts', 'Pharmacy Receipts']}
+          onApprove={onApproveDoc}
+          onRequestReupload={onRequestReupload}
+          onRequestMissing={onRequestMissing}
+          onView={onViewDoc}
+          canEdit={canEdit}
+        />
       </T1CRASection>
 
       {/* Q3: Charitable Donations */}
@@ -316,6 +355,17 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
             <span className="text-lg font-bold text-purple-600">{formatCurrency(totalDonations)}</span>
           </div>
         </div>
+        <QuestionDocuments
+          sectionKey="CHARITABLE_DONATIONS"
+          sectionTitle="Charitable Donation Documents"
+          documents={documents}
+          requiredDocuments={['Charitable Donation Receipts']}
+          onApprove={onApproveDoc}
+          onRequestReupload={onRequestReupload}
+          onRequestMissing={onRequestMissing}
+          onView={onViewDoc}
+          canEdit={canEdit}
+        />
       </T1CRASection>
 
       {/* Q4: Moving Expenses */}
@@ -367,6 +417,17 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
                 <CopyableField label="Income Earned After Move" value={formatCurrency(formData.movingExpenses.incomeEarnedAfterMove)} />
               </div>
             </div>
+            <QuestionDocuments
+              sectionKey="MOVING_EXPENSES"
+              sectionTitle="Moving Expense Documents"
+              documents={documents}
+              requiredDocuments={['Moving Expense Receipts']}
+              onApprove={onApproveDoc}
+              onRequestReupload={onRequestReupload}
+              onRequestMissing={onRequestMissing}
+              onView={onViewDoc}
+              canEdit={canEdit}
+            />
           </div>
         )}
       </T1CRASection>
@@ -614,6 +675,16 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
                 ))}
               </>
             )}
+            <QuestionDocuments
+              sectionKey="SELF_EMPLOYMENT"
+              sectionTitle="Self-Employment Documents"
+              documents={documents}
+              onApprove={onApproveDoc}
+              onRequestReupload={onRequestReupload}
+              onRequestMissing={onRequestMissing}
+              onView={onViewDoc}
+              canEdit={canEdit}
+            />
           </div>
         )}
       </T1CRASection>
@@ -713,6 +784,17 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
                 <span className="text-lg font-bold text-primary">{formatCurrency(formData.workFromHome.claimableAmount)}</span>
               </div>
             </div>
+            <QuestionDocuments
+              sectionKey="WORK_FROM_HOME"
+              sectionTitle="Work From Home Documents"
+              documents={documents}
+              requiredDocuments={['T2200 Form']}
+              onApprove={onApproveDoc}
+              onRequestReupload={onRequestReupload}
+              onRequestMissing={onRequestMissing}
+              onView={onViewDoc}
+              canEdit={canEdit}
+            />
           </div>
         )}
       </T1CRASection>
@@ -735,6 +817,17 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
             {idx < (formData.tuition?.length || 0) - 1 && <Separator className="mt-6" />}
           </div>
         ))}
+        <QuestionDocuments
+          sectionKey="TUITION"
+          sectionTitle="Tuition Documents"
+          documents={documents}
+          requiredDocuments={['T2202 Form']}
+          onApprove={onApproveDoc}
+          onRequestReupload={onRequestReupload}
+          onRequestMissing={onRequestMissing}
+          onView={onViewDoc}
+          canEdit={canEdit}
+        />
       </T1CRASection>
 
       {/* Q11: Union Member / Union Dues */}
@@ -750,6 +843,17 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
             { key: 'amountPaid', header: 'Amount', format: (v) => formatCurrency(v as number) },
           ]}
           data={(formData.unionDues || []).map(u => ({ ...u, institutionName: u.institutionName || u.unionName || 'N/A' }))}
+        />
+        <QuestionDocuments
+          sectionKey="UNION_DUES"
+          sectionTitle="Union Dues Documents"
+          documents={documents}
+          requiredDocuments={['Union Dues Receipt']}
+          onApprove={onApproveDoc}
+          onRequestReupload={onRequestReupload}
+          onRequestMissing={onRequestMissing}
+          onView={onViewDoc}
+          canEdit={canEdit}
         />
       </T1CRASection>
 
@@ -768,6 +872,17 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
             { key: 'weeks', header: 'Weeks', format: (v) => (v as number)?.toString() || 'N/A' },
           ]}
           data={formData.childcare || []}
+        />
+        <QuestionDocuments
+          sectionKey="CHILDCARE"
+          sectionTitle="Daycare Expense Documents"
+          documents={documents}
+          requiredDocuments={['Day Care Expense Receipts']}
+          onApprove={onApproveDoc}
+          onRequestReupload={onRequestReupload}
+          onRequestMissing={onRequestMissing}
+          onView={onViewDoc}
+          canEdit={canEdit}
         />
       </T1CRASection>
 
@@ -821,6 +936,17 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
           data={formData.professionalDues || []}
           emptyMessage="No professional dues reported"
         />
+        <QuestionDocuments
+          sectionKey="PROFESSIONAL_DUES"
+          sectionTitle="Professional Dues Documents"
+          documents={documents}
+          requiredDocuments={['Professional Fees Receipt']}
+          onApprove={onApproveDoc}
+          onRequestReupload={onRequestReupload}
+          onRequestMissing={onRequestMissing}
+          onView={onViewDoc}
+          canEdit={canEdit}
+        />
       </T1CRASection>
 
       {/* Q16: RRSP/FHSA Investment */}
@@ -836,6 +962,17 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
             { key: 'contributionAmount', header: 'Amount', format: (v) => formatCurrency(v as number) },
           ]}
           data={formData.rrspContributions || []}
+        />
+        <QuestionDocuments
+          sectionKey="RRSP"
+          sectionTitle="RRSP/FHSA Documents"
+          documents={documents}
+          requiredDocuments={['RRSP/FHSA T-slips']}
+          onApprove={onApproveDoc}
+          onRequestReupload={onRequestReupload}
+          onRequestMissing={onRequestMissing}
+          onView={onViewDoc}
+          canEdit={canEdit}
         />
       </T1CRASection>
 
@@ -895,6 +1032,17 @@ export function T1CRAReadyForm({ clientId, filingYear }: T1CRAReadyFormProps) {
             {idx < (formData.disabilityTaxCredit?.length || 0) - 1 && <Separator className="mt-6" />}
           </div>
         ))}
+        <QuestionDocuments
+          sectionKey="DISABILITY"
+          sectionTitle="Disability Tax Credit Documents"
+          documents={documents}
+          requiredDocuments={['Disability Approval form']}
+          onApprove={onApproveDoc}
+          onRequestReupload={onRequestReupload}
+          onRequestMissing={onRequestMissing}
+          onView={onViewDoc}
+          canEdit={canEdit}
+        />
       </T1CRASection>
 
       {/* Q20: Filing for Deceased */}
