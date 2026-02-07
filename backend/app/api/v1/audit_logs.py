@@ -1,0 +1,70 @@
+"""
+Audit Log routes
+"""
+from typing import Optional
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, and_
+from sqlalchemy.orm import selectinload
+
+from app.core.database import get_db
+from app.core.dependencies import get_current_admin
+from app.core.utils import calculate_pagination
+from app.models.audit_log import AuditLog
+from app.models.admin_user import AdminUser
+from app.schemas.audit_log import AuditLogResponse, AuditLogListResponse
+
+router = APIRouter()
+
+
+@router.get("", response_model=AuditLogListResponse)
+async def get_audit_logs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    entity_type: Optional[str] = None,
+    action: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_admin = Depends(get_current_admin)
+):
+    """Get audit logs with pagination (superadmin only)"""
+    query = select(AuditLog).options(selectinload(AuditLog.performed_by_admin))
+    
+    conditions = []
+    if entity_type:
+        conditions.append(AuditLog.entity_type == entity_type)
+    if action:
+        conditions.append(AuditLog.action.ilike(f"%{action}%"))
+    
+    if conditions:
+        query = query.where(and_(*conditions))
+    
+    # Count total
+    count_query = select(func.count()).select_from(AuditLog)
+    if conditions:
+        count_query = count_query.where(and_(*conditions))
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+    
+    # Apply pagination
+    query = query.order_by(AuditLog.timestamp.desc())
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    
+    result = await db.execute(query)
+    logs = result.scalars().all()
+    
+    # Format response
+    log_responses = []
+    for log in logs:
+        log_dict = AuditLogResponse.model_validate(log).model_dump()
+        if log.performed_by_admin:
+            log_dict["performed_by_name"] = log.performed_by_admin.name
+        log_responses.append(AuditLogResponse(**log_dict))
+    
+    pagination = calculate_pagination(page, page_size, total)
+    
+    return AuditLogListResponse(
+        logs=log_responses,
+        **pagination
+    )
+
+

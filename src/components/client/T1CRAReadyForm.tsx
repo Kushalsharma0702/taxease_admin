@@ -36,9 +36,264 @@ import {
   Calculator,
 } from 'lucide-react';
 
+// Convert API T1 form data to the format expected by the component
+function convertApiDataToFormData(t1Data: any) {
+  if (!t1Data || !t1Data.answers) return null;
+  
+  // Convert flat answers array to nested object using dot notation
+  const answersMap: Record<string, any> = {};
+  
+  t1Data.answers.forEach((answer: any) => {
+    const keys = answer.field_key.split('.');
+    let current = answersMap;
+    
+    for (let i = 0; i < keys.length - 1; i++) {
+      const key = keys[i];
+      
+      // Handle array notation like children[0]
+      const arrayMatch = key.match(/^(.+)\[(\d+)\]$/);
+      if (arrayMatch) {
+        const arrayName = arrayMatch[1];
+        const index = parseInt(arrayMatch[2]);
+        
+        if (!current[arrayName]) {
+          current[arrayName] = [];
+        }
+        if (!current[arrayName][index]) {
+          current[arrayName][index] = {};
+        }
+        current = current[arrayName][index];
+      } else {
+        if (!current[key]) {
+          current[key] = {};
+        }
+        current = current[key];
+      }
+    }
+    
+    const lastKey = keys[keys.length - 1];
+    const arrayMatch = lastKey.match(/^(.+)\[(\d+)\]$/);
+    
+    if (arrayMatch) {
+      const arrayName = arrayMatch[1];
+      const index = parseInt(arrayMatch[2]);
+      if (!current[arrayName]) {
+        current[arrayName] = [];
+      }
+      current[arrayName][index] = answer.value;
+    } else {
+      current[lastKey] = answer.value;
+    }
+  });
+  
+  // Extract personalInfo with safe defaults
+  const personalInfo = answersMap.personalInfo || {};
+  
+  // Parse address - check both address and currentAddress
+  let addressObj = { street: '', city: '', province: '', postalCode: '' };
+  const addressSource = personalInfo.currentAddress || personalInfo.address;
+  
+  if (typeof addressSource === 'string') {
+    // Try to parse if it's a string (like "201310" or a full address)
+    addressObj.postalCode = addressSource;
+  } else if (addressSource && typeof addressSource === 'object') {
+    addressObj = {
+      street: addressSource.street || '',
+      city: addressSource.city || '',
+      province: addressSource.province || '',
+      postalCode: addressSource.postalCode || ''
+    };
+  }
+  
+  // Helper function to safely get value with fallback
+  const safeValue = (val: any, defaultVal: any = '') => {
+    return val !== undefined && val !== null && val !== 'N/A' ? val : defaultVal;
+  };
+  
+  // Helper to convert array data with proper field mapping
+  const convertArray = (arr: any[], fieldMap: Record<string, string> = {}) => {
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(item => item && typeof item === 'object').map(item => {
+      const converted: any = {};
+      for (const [key, value] of Object.entries(item)) {
+        const mappedKey = fieldMap[key] || key;
+        converted[mappedKey] = safeValue(value);
+      }
+      return converted;
+    });
+  };
+  
+  console.log('Raw answersMap:', answersMap);
+  console.log('rrspContributions array:', answersMap.rrspContributions);
+  console.log('childArtSportActivities array:', answersMap.childArtSportActivities);
+  console.log('provinceRent:', answersMap.provinceRent);
+  
+  // Convert medical expenses array
+  const medicalExpenses = answersMap.medicalExpenses ? convertArray(answersMap.medicalExpenses, {
+    description: 'description',
+    amount: 'amountPaid'
+  }).map(item => ({
+    ...item,
+    amountPaid: parseFloat(item.amountPaid) || 0,
+    paymentDate: item.paymentDate || new Date().toISOString().split('T')[0],
+    patientName: item.patientName || `${personalInfo.firstName} ${personalInfo.lastName}`,
+    paymentMadeTo: item.paymentMadeTo || item.description,
+    insuranceCovered: item.insuranceCovered || 'no'
+  })) : [];
+  
+  // Convert charitable donations array
+  const charitableDonations = answersMap.charitableDonations ? convertArray(answersMap.charitableDonations, {
+    organizationName: 'organizationName',
+    amount: 'amountPaid'
+  }).map(item => ({
+    ...item,
+    amountPaid: parseFloat(item.amountPaid) || 0,
+    receiptNumber: item.receiptNumber || ''
+  })) : [];
+  
+  // Convert daycare expenses array
+  const daycareExpenses = answersMap.daycareExpenses ? convertArray(answersMap.daycareExpenses, {
+    childName: 'childName',
+    providerName: 'providerName',
+    amount: 'amountPaid'
+  }).map(item => ({
+    ...item,
+    amountPaid: parseFloat(item.amountPaid) || 0,
+    receiptNumber: item.receiptNumber || ''
+  })) : [];
+  
+  // Convert professional dues array
+  const professionalDues = answersMap.professionalDues ? convertArray(answersMap.professionalDues, {
+    organization: 'organization',
+    amount: 'amountPaid'
+  }).map(item => ({
+    ...item,
+    amountPaid: parseFloat(item.amountPaid) || 0,
+    name: item.name || item.organization,
+    receiptNumber: item.receiptNumber || ''
+  })) : [];
+  
+  // Convert RRSP contributions array
+  const rrspContributions = answersMap.rrspContributions ? convertArray(answersMap.rrspContributions, {
+    institutionName: 'institutionName',
+    amount: 'contributionAmount'
+  }).map(item => ({
+    ...item,
+    contributionAmount: parseFloat(item.contributionAmount) || 0,
+    receiptNumber: item.receiptNumber || ''
+  })) : [];
+  
+  // Convert children's activities array
+  const childrenCredits = answersMap.childArtSportActivities ? convertArray(answersMap.childArtSportActivities, {
+    childName: 'childName',
+    activityType: 'description',
+    amount: 'amountPaid'
+  }).map(item => ({
+    ...item,
+    instituteName: item.childName || 'N/A',
+    description: item.description || item.activityType || 'N/A',
+    programDescription: item.description || item.activityType || 'N/A',
+    amountPaid: parseFloat(item.amountPaid) || 0
+  })) : [];
+  
+  // Convert foreign properties array
+  const foreignProperties = answersMap.foreignProperties ? convertArray(answersMap.foreignProperties).map(item => ({
+    ...item,
+    costAmount: parseFloat(item.costAmount) || 0,
+    currentValue: parseFloat(item.currentValue) || 0,
+    incomeGenerated: parseFloat(item.incomeGenerated) || 0
+  })) : [];
+  
+  // Convert work from home data
+  const workFromHomeData = answersMap.workFromHome ? {
+    totalHomeArea: parseFloat(answersMap.workFromHome.totalHouseArea || answersMap.workFromHome.totalHomeArea) || 0,
+    workArea: parseFloat(answersMap.workFromHome.workArea) || 0,
+    rentExpense: parseFloat(answersMap.workFromHome.rentExpense) || 0,
+    mortgageInterest: parseFloat(answersMap.workFromHome.mortgageExpense || answersMap.workFromHome.mortgageInterest) || 0,
+    internetExpense: parseFloat(answersMap.workFromHome.wifiExpense || answersMap.workFromHome.internetExpense) || 0,
+    utilities: parseFloat(answersMap.workFromHome.electricityExpense || answersMap.workFromHome.utilities) || 0,
+    waterExpense: parseFloat(answersMap.workFromHome.waterExpense) || 0,
+    heatExpense: parseFloat(answersMap.workFromHome.heatExpense) || 0,
+    homeInsurance: parseFloat(answersMap.workFromHome.insuranceExpense || answersMap.workFromHome.homeInsurance) || 0,
+    claimableAmount: parseFloat(answersMap.workFromHome.claimableAmount) || 0
+  } : null;
+  
+  // Convert spouse info
+  const spouseInfo = personalInfo.spouse ? {
+    firstName: safeValue(personalInfo.spouse.firstName),
+    lastName: safeValue(personalInfo.spouse.lastName),
+    sin: safeValue(personalInfo.spouse.sin),
+    dateOfBirth: safeValue(personalInfo.spouse.dateOfBirth),
+    netIncome: parseFloat(personalInfo.spouse.netIncome) || 0
+  } : null;
+  
+  // Convert children array
+  const children = personalInfo.children ? convertArray(personalInfo.children).map(item => ({
+    firstName: safeValue(item.firstName),
+    lastName: safeValue(item.lastName),
+    dateOfBirth: safeValue(item.dateOfBirth),
+    sin: safeValue(item.sin),
+    relationship: safeValue(item.relationship)
+  })) : [];
+  
+  // Return a structure that matches what the component expects
+  return {
+    personalInfo: {
+      firstName: safeValue(personalInfo.firstName),
+      middleName: safeValue(personalInfo.middleName),
+      lastName: safeValue(personalInfo.lastName),
+      sin: safeValue(personalInfo.sin),
+      maritalStatus: safeValue(personalInfo.maritalStatus, 'single'),
+      dateOfBirth: safeValue(personalInfo.dateOfBirth),
+      isCanadianCitizen: personalInfo.isCanadianCitizen === true,
+      currentAddress: addressObj,
+      mailingAddressSame: true,
+      mailingAddress: addressObj,
+      phone: safeValue(personalInfo.phoneNumber || personalInfo.phone),
+      email: safeValue(personalInfo.email),
+      directDeposit: personalInfo.directDeposit === true,
+      bankInfo: personalInfo.bankInfo || null,
+      spouse: spouseInfo,
+      children: children
+    },
+    employmentIncome: Array.isArray(answersMap.employmentIncome) ? answersMap.employmentIncome : [],
+    investmentIncome: Array.isArray(answersMap.investmentIncome) ? answersMap.investmentIncome : [],
+    selfEmployment: answersMap.isSelfEmployed === true ? (answersMap.selfEmployment || {}) : null,
+    rentalIncome: Array.isArray(answersMap.rentalIncome) ? answersMap.rentalIncome : [],
+    rrspContributions: rrspContributions,
+    medicalExpenses: medicalExpenses,
+    charitableDonations: charitableDonations,
+    movingExpenses: answersMap.hasMovingExpenses === true ? (answersMap.movingExpenses || null) : null,
+    childcare: daycareExpenses,
+    unionDues: answersMap.isUnionMember === true ? (Array.isArray(answersMap.unionDues) ? answersMap.unionDues : []) : [],
+    professionalDues: professionalDues,
+    tuition: answersMap.wasStudentLastYear === true ? (Array.isArray(answersMap.tuition) ? answersMap.tuition : []) : [],
+    childrenCredits: childrenCredits,
+    foreignProperty: foreignProperties,
+    workFromHome: workFromHomeData,
+    firstTimeFiler: answersMap.isFirstTimeFiler === true,
+    disabilities: answersMap.hasDisabilityTaxCredit === true ? (answersMap.disabilities || {}) : null,
+    homeAccessibility: answersMap.homeAccessibility || null,
+    politicalContributions: Array.isArray(answersMap.politicalContributions) ? answersMap.politicalContributions : [],
+    rentPropertyTax: answersMap.provinceRent ? {
+      amount: parseFloat(answersMap.provinceRent.amount) || 0,
+      type: answersMap.provinceRent.type || 'rent',
+      rentOrPropertyTax: answersMap.provinceRent.type === 'rent' ? 'Rent' : 'Property Tax',
+      rentOrOwn: answersMap.provinceRent.type || 'rent',
+      amountPaid: parseFloat(answersMap.provinceRent.amount) || 0,
+      occupancyCost: parseFloat(answersMap.provinceRent.amount) || 0,
+      propertyAddress: personalInfo.currentAddress ? 
+        `${personalInfo.currentAddress.street}, ${personalInfo.currentAddress.city}` : '',
+      postalCode: personalInfo.currentAddress?.postalCode || '',
+      numberOfMonthsResides: 12
+    } : null
+  };
+}
+
 interface T1CRAReadyFormProps {
   clientId: string;
   filingYear: number;
+  t1FormData?: any; // Real T1 form data from API
   documents?: DocType[];
   onApproveDoc?: (docId: string) => void;
   onRequestReupload?: (docId: string, reason: string) => void;
@@ -47,19 +302,23 @@ interface T1CRAReadyFormProps {
   canEdit?: boolean;
 }
 
-const formatCurrency = (value: number | undefined): string => formatCurrencyUtil(value);
-const formatPercentage = (value: number | undefined): string => {
-  if (value === undefined || value === null) return 'N/A';
+const formatCurrency = (value: number | undefined | null): string => {
+  if (value === undefined || value === null || isNaN(Number(value))) return '$0.00';
+  return formatCurrencyUtil(value);
+};
+const formatPercentage = (value: number | undefined | null): string => {
+  if (value === undefined || value === null || isNaN(Number(value))) return 'N/A';
   return `${value}%`;
 };
-const formatDate = (value: string | undefined): string => {
-  if (!value) return 'N/A';
-  return formatDateUtil(new Date(value));
+const formatDate = (value: string | undefined | null): string => {
+  if (!value || value === 'N/A') return 'N/A';
+  return formatDateUtil(value);
 };
 
 export function T1CRAReadyForm({ 
   clientId, 
   filingYear,
+  t1FormData,
   documents = [],
   onApproveDoc,
   onRequestReupload,
@@ -70,7 +329,18 @@ export function T1CRAReadyForm({
   const [copiedSummary, setCopiedSummary] = useState(false);
   const { toast } = useToast();
 
-  const formData = useMemo(() => getT1FormData(clientId), [clientId]);
+  // Use real T1 form data if available, otherwise fall back to mock data
+  const formData = useMemo(() => {
+    if (t1FormData && t1FormData.answers) {
+      // Convert API answers to the format expected by the component
+      const converted = convertApiDataToFormData(t1FormData);
+      console.log('Converted T1 Form Data:', converted);
+      return converted;
+    }
+    // Fallback to mock data
+    console.log('Using mock data for client:', clientId);
+    return getT1FormData(clientId);
+  }, [t1FormData, clientId]);
 
   if (!formData) {
     return (
@@ -774,14 +1044,21 @@ export function T1CRAReadyForm({
               <CopyableField label="Mortgage Expense" value={formatCurrency(formData.workFromHome.mortgageInterest)} />
               <CopyableField label="Wifi Expense" value={formatCurrency(formData.workFromHome.internetExpense)} />
               <CopyableField label="Electricity Expense" value={formatCurrency(formData.workFromHome.utilities)} />
-              <CopyableField label="Water Expense" value={formatCurrency(0)} />
-              <CopyableField label="Heat Expense" value={formatCurrency(0)} />
+              <CopyableField label="Water Expense" value={formatCurrency(formData.workFromHome.waterExpense || 0)} />
+              <CopyableField label="Heat Expense" value={formatCurrency(formData.workFromHome.heatExpense || 0)} />
               <CopyableField label="Total Insurance Expense" value={formatCurrency(formData.workFromHome.homeInsurance)} />
             </div>
             <div className="mt-4 p-3 rounded-lg bg-primary/10 border border-primary/20">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Claimable Amount</span>
-                <span className="text-lg font-bold text-primary">{formatCurrency(formData.workFromHome.claimableAmount)}</span>
+                <span className="text-lg font-bold text-primary">{formatCurrency(
+                  formData.workFromHome.claimableAmount || 
+                  ((formData.workFromHome.rentExpense + formData.workFromHome.mortgageInterest + 
+                    formData.workFromHome.internetExpense + formData.workFromHome.utilities + 
+                    (formData.workFromHome.waterExpense || 0) + (formData.workFromHome.heatExpense || 0) + 
+                    formData.workFromHome.homeInsurance) * 
+                   (formData.workFromHome.workArea / (formData.workFromHome.totalHomeArea || 1)))
+                )}</span>
               </div>
             </div>
             <QuestionDocuments

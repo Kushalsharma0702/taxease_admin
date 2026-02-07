@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, UserRole, PERMISSIONS } from '@/types';
 import { getSession, setSession, clearSession, refreshSession } from '@/lib/session';
+import { api } from '@/services/api';
 
 interface AuthContextType {
   user: User | null;
@@ -66,16 +67,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    const foundUser = MOCK_USERS.find(u => u.email === email);
-    if (foundUser && password === 'demo123') {
-      setUser(foundUser);
-      await setSession(foundUser);
-      return true;
+    try {
+      const response = await api.login(email, password);
+      if (response.user && response.token) {
+        const user: User = {
+          id: response.user.id,
+          email: response.user.email,
+          name: response.user.name,
+          role: response.user.role as UserRole,
+          permissions: response.user.permissions || [],
+          isActive: response.user.is_active,
+          createdAt: new Date(response.user.created_at),
+        };
+        setUser(user);
+        await setSession(user);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Login failed:', error);
+      return false;
     }
-    return false;
   };
 
   const logout = async () => {
+    try {
+      await api.logout();
+    } catch (e) {
+      // Continue with local cleanup even if API fails
+    }
     setUser(null);
     await clearSession();
   };

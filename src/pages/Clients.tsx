@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DataTable } from '@/components/ui/data-table';
@@ -32,17 +32,17 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
-import { mockClients } from '@/data/mockData';
 import { Client, STATUS_LABELS, ClientStatus } from '@/types';
-import { Plus, Download, Trash2, Edit, Loader2 } from 'lucide-react';
+import { Plus, Download, Trash2, Edit, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { api } from '@/services/api';
 
 export default function Clients() {
   const navigate = useNavigate();
   const { hasPermission } = useAuth();
   const { toast } = useToast();
-  const [clients, setClients] = useState(mockClients);
+  const [clients, setClients] = useState<Client[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [yearFilter, setYearFilter] = useState<string>('all');
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -50,14 +50,60 @@ export default function Clients() {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
   const [newClient, setNewClient] = useState({ name: '', email: '', phone: '' });
   const [editClient, setEditClient] = useState({ name: '', email: '', phone: '' });
 
-  const filteredClients = clients.filter((client) => {
-    if (statusFilter !== 'all' && client.status !== statusFilter) return false;
-    if (yearFilter !== 'all' && client.filingYear.toString() !== yearFilter) return false;
-    return true;
-  });
+  // Fetch clients from API (now using users endpoint for real data)
+  const fetchClients = useCallback(async () => {
+    setIsFetching(true);
+    try {
+      const params: { search?: string; has_filings?: boolean } = {};
+      if (statusFilter === 'with_filings') params.has_filings = true;
+      if (statusFilter === 'without_filings') params.has_filings = false;
+      
+      const response = await api.getUsers(params);
+      
+      // Map API response to Client type  
+      const mappedClients: Client[] = (response.users || []).map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        phone: u.phone || '',
+        filingYear: new Date().getFullYear(), // Current year as default
+        status: u.filing_count > 0 ? 'under_review' : 'documents_pending' as ClientStatus,
+        paymentStatus: 'pending',
+        totalAmount: 0,
+        paidAmount: 0,
+        assignedAdminId: null,
+        assignedAdminName: null,
+        createdAt: new Date(u.created_at),
+        updatedAt: new Date(u.created_at),
+        // Add filing data
+        filingCount: u.filing_count,
+        t1FormCount: u.t1_form_count,
+        latestFiling: u.latest_filing ? new Date(u.latest_filing) : null,
+      }));
+      
+      setClients(mappedClients);
+    } catch (error: any) {
+      console.error('Failed to fetch clients:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to fetch clients from server',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsFetching(false);
+    }
+  }, [statusFilter, toast]);
+
+  // Fetch on mount and when filters change
+  useEffect(() => {
+    fetchClients();
+  }, [fetchClients]);
+
+  const filteredClients = clients;
 
   const columns = [
     {
@@ -72,7 +118,26 @@ export default function Clients() {
       ),
     },
     { key: 'phone', header: 'Phone', sortable: false },
-    { key: 'filingYear', header: 'Year', sortable: true },
+    {
+      key: 'filingCount',
+      header: 'Filings',
+      sortable: true,
+      render: (client: Client) => (
+        <div className="text-center">
+          <span className="font-semibold">{client.filingCount || 0}</span>
+        </div>
+      ),
+    },
+    {
+      key: 't1FormCount',
+      header: 'T1 Forms',
+      sortable: true,
+      render: (client: Client) => (
+        <div className="text-center">
+          <span className="font-semibold">{client.t1FormCount || 0}</span>
+        </div>
+      ),
+    },
     {
       key: 'status',
       header: 'Status',
@@ -80,15 +145,16 @@ export default function Clients() {
       render: (client: Client) => <StatusBadge status={client.status} type="client" />,
     },
     {
-      key: 'paymentStatus',
-      header: 'Payment',
+      key: 'latestFiling',
+      header: 'Latest Filing',
       sortable: true,
-      render: (client: Client) => <StatusBadge status={client.paymentStatus} type="payment" />,
-    },
-    {
-      key: 'assignedAdminName',
-      header: 'Assigned To',
-      render: (client: Client) => client.assignedAdminName || '-',
+      render: (client: Client) => (
+        <div className="text-sm">
+          {client.latestFiling 
+            ? new Date(client.latestFiling).toLocaleDateString() 
+            : '-'}
+        </div>
+      ),
     },
     {
       key: 'actions',
@@ -151,30 +217,31 @@ export default function Clients() {
     }
 
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      await api.createClient({
+        name: newClient.name,
+        email: newClient.email,
+        phone: newClient.phone,
+        filing_year: new Date().getFullYear(),
+      });
 
-    const client: Client = {
-      id: String(Date.now()),
-      name: newClient.name,
-      email: newClient.email,
-      phone: newClient.phone,
-      filingYear: new Date().getFullYear(),
-      status: 'documents_pending',
-      paymentStatus: 'pending',
-      totalAmount: 0,
-      paidAmount: 0,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    setClients([client, ...clients]);
-    setNewClient({ name: '', email: '', phone: '' });
-    setIsAddOpen(false);
-    setIsLoading(false);
-    toast({
-      title: 'Client Added',
-      description: `${client.name} has been added successfully.`,
-    });
+      setNewClient({ name: '', email: '', phone: '' });
+      setIsAddOpen(false);
+      toast({
+        title: 'Client Added',
+        description: `${newClient.name} has been added successfully.`,
+      });
+      // Refresh the list
+      fetchClients();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to add client',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleEditClient = async () => {
@@ -188,37 +255,55 @@ export default function Clients() {
     }
 
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    setClients(prev => prev.map(c => 
-      c.id === selectedClient.id 
-        ? { ...c, name: editClient.name, email: editClient.email, phone: editClient.phone, updatedAt: new Date() }
-        : c
-    ));
+    try {
+      await api.updateClient(selectedClient.id, {
+        name: editClient.name,
+        email: editClient.email,
+        phone: editClient.phone,
+      });
     
-    setIsEditOpen(false);
-    setSelectedClient(null);
-    setIsLoading(false);
-    toast({
-      title: 'Client Updated',
-      description: `${editClient.name}'s information has been updated.`,
-    });
+      setIsEditOpen(false);
+      setSelectedClient(null);
+      toast({
+        title: 'Client Updated',
+        description: `${editClient.name}'s information has been updated.`,
+      });
+      // Refresh the list
+      fetchClients();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update client',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDeleteClient = async () => {
     if (!selectedClient) return;
 
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    setClients(prev => prev.filter(c => c.id !== selectedClient.id));
-    setIsDeleteOpen(false);
-    setIsLoading(false);
-    toast({
-      title: 'Client Deleted',
-      description: `${selectedClient.name} has been removed from the system.`,
-    });
-    setSelectedClient(null);
+    try {
+      await api.deleteClient(selectedClient.id);
+      setIsDeleteOpen(false);
+      toast({
+        title: 'Client Deleted',
+        description: `${selectedClient.name} has been removed from the system.`,
+      });
+      setSelectedClient(null);
+      // Refresh the list
+      fetchClients();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete client',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

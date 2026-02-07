@@ -48,14 +48,14 @@ export const API_CONFIG = {
 export const API_ENDPOINTS = {
   // Authentication endpoints
   AUTH: {
-    LOGIN: '/auth/login',
-    LOGOUT: '/auth/logout',
-    REFRESH: '/auth/refresh',
+    LOGIN: '/admin/auth/login',
+    LOGOUT: '/admin/auth/logout',
+    REFRESH: '/admin/auth/refresh',
     REGISTER: '/auth/register',
     FORGOT_PASSWORD: '/auth/forgot-password',
     RESET_PASSWORD: '/auth/reset-password',
     VERIFY_EMAIL: '/auth/verify-email',
-    ME: '/auth/me',
+    ME: '/admin/auth/me',
   },
 
   // Admin endpoints

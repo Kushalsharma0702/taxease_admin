@@ -46,6 +46,10 @@ export interface Client {
   createdAt: Date;
   updatedAt: Date;
   personalInfo?: PersonalInfo;
+  // Additional fields from users table
+  filingCount?: number;
+  t1FormCount?: number;
+  latestFiling?: Date | null;
 }
 export interface T1Question {
   id: string;

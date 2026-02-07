@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,7 +37,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { T1SectionCard } from '@/components/client/T1SectionCard';
 import { T1CRAReadyForm } from '@/components/client/T1CRAReadyForm';
-import { mockClients, mockDocuments, mockPayments, mockNotes, mockQuestionnaires } from '@/data/mockData';
+import { mockDocuments, mockPayments, mockNotes, mockQuestionnaires } from '@/data/mockData';
 import { STATUS_LABELS, ClientStatus, PERMISSIONS, Note, Document as DocType, T1Question, DocumentStatus, TaxFile } from '@/types';
 import {
   User,
@@ -71,6 +71,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { exportClientPDF } from '@/lib/pdfExport';
+import { api } from '@/services/api';
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -78,11 +79,63 @@ export default function ClientDetail() {
   const { hasPermission, user } = useAuth();
   const { toast } = useToast();
 
-  const [client, setClient] = useState(() => mockClients.find((c) => c.id === id));
+  const [client, setClient] = useState<any>(null);
+  const [userFilings, setUserFilings] = useState<any[]>([]);
+  const [t1FormData, setT1FormData] = useState<any>(null);
+  const [isLoadingClient, setIsLoadingClient] = useState(true);
   const [documents, setDocuments] = useState(() => mockDocuments.filter((d) => d.clientId === id));
   const [payments, setPayments] = useState(() => mockPayments.filter((p) => p.clientId === id));
   const [notes, setNotes] = useState<Note[]>(() => mockNotes.filter((n) => n.clientId === id));
   const questionnaire = useMemo(() => mockQuestionnaires.find((q) => q.clientId === id), [id]);
+
+  // Fetch user and their filings
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!id) return;
+      
+      setIsLoadingClient(true);
+      try {
+        // Fetch user's basic info, filings, and T1 form data in parallel
+        const [userInfo, filingsData, t1Data] = await Promise.all([
+          api.getUser(id),
+          api.getUserFilings(id),
+          api.getUserT1FormData(id)
+        ]);
+        
+        setUserFilings(filingsData.filings || []);
+        setT1FormData(t1Data?.t1_form || null);
+        
+        // Create a client object from the user data
+        const clientData = {
+          id: id,
+          name: userInfo?.name || 'Unknown User',
+          email: userInfo?.email || '',
+          phone: userInfo?.phone || '',
+          filingYear: new Date().getFullYear(),
+          status: (filingsData.total_filings > 0 ? 'under_review' : 'documents_pending') as ClientStatus,
+          paymentStatus: 'pending',
+          totalAmount: 0,
+          paidAmount: 0,
+          createdAt: userInfo?.created_at ? new Date(userInfo.created_at) : new Date(),
+          updatedAt: new Date(),
+          filingCount: filingsData.total_filings || 0,
+        };
+        
+        setClient(clientData);
+      } catch (error: any) {
+        console.error('Failed to fetch user data:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load client details',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoadingClient(false);
+      }
+    };
+
+    fetchUserData();
+  }, [id, toast]);
 
   const [newNote, setNewNote] = useState('');
   const [isClientFacing, setIsClientFacing] = useState(false);
@@ -125,6 +178,17 @@ export default function ClientDetail() {
     const reuploadRequested = documents.filter((d) => d.status === 'reupload_requested').length;
     return { approved, pending, missing, reuploadRequested, total: documents.length };
   }, [documents]);
+
+  if (isLoadingClient) {
+    return (
+      <DashboardLayout title="Loading..." breadcrumbs={[{ label: 'Clients', href: '/clients' }]}>
+        <div className="flex flex-col items-center justify-center h-[50vh] gap-4">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <p className="text-muted-foreground">Loading client details...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   if (!client) {
     return (
@@ -625,6 +689,63 @@ export default function ClientDetail() {
               </Card>
             </div>
 
+            {/* Filings and T1 Forms */}
+            {userFilings.length > 0 && (
+              <Card className="transition-all duration-300 hover:shadow-md">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <FileText className="h-5 w-5 text-primary" />
+                    Filings & T1 Forms ({userFilings.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {userFilings.map((filing) => (
+                    <div key={filing.filing_id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h4 className="font-semibold">Filing Year: {filing.filing_year}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Status: <StatusBadge status={filing.filing_status} type="client" />
+                          </p>
+                        </div>
+                        <div className="text-right text-sm text-muted-foreground">
+                          <p>Created: {new Date(filing.filing_created).toLocaleDateString()}</p>
+                          <p>Updated: {new Date(filing.filing_updated).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                      
+                      {filing.t1_form && (
+                        <div className="mt-3 pt-3 border-t">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium">T1 Form</p>
+                              <p className="text-xs text-muted-foreground">
+                                Status: {filing.t1_form.status} • 
+                                Completion: {filing.t1_form.completion_percentage}% • 
+                                Answers: {filing.t1_form.answer_count}
+                              </p>
+                              {filing.t1_form.is_locked && (
+                                <Badge variant="secondary" className="mt-1">
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  Locked/Submitted
+                                </Badge>
+                              )}
+                            </div>
+                            {filing.t1_form.submitted_at && (
+                              <div className="text-right text-xs text-muted-foreground">
+                                <p>Submitted:</p>
+                                <p>{new Date(filing.t1_form.submitted_at).toLocaleDateString()}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Document Overview Stats */}
             <Card className="transition-all duration-300 hover:shadow-md">
               <CardHeader className="pb-3">
@@ -666,6 +787,7 @@ export default function ClientDetail() {
             <T1CRAReadyForm 
               clientId={client.id} 
               filingYear={client.filingYear}
+              t1FormData={t1FormData}
               documents={documents}
               onApproveDoc={handleApproveDocument}
               onRequestReupload={handleRequestReupload}

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Page</title>
+</head>
+<body>
+    <h1>If you see this, the server is working!</h1>
+    <div id="test">Testing...</div>
+    <script>
+        console.log('Test script loaded');
+        document.getElementById('test').textContent = 'JavaScript is working!';
+        
+        // Test API connection
+        fetch('http://localhost:8001/health')
+            .then(r => r.json())
+            .then(data => {
+                console.log('API Response:', data);
+                document.getElementById('test').textContent = 'API connection: ' + JSON.stringify(data);
+            })
+            .catch(err => {
+                console.error('API Error:', err);
+                document.getElementById('test').textContent = 'API Error: ' + err.message;
+            });
+    </script>
+</body>
+</html>

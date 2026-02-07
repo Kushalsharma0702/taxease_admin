@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,32 +21,66 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { mockDocuments, mockClients } from '@/data/mockData';
 import { Document as DocType } from '@/types';
 import { FileText, Search, Send, Trash2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { PERMISSIONS } from '@/types';
+import { apiService } from '@/services/api';
 
 export default function Documents() {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [documents, setDocuments] = useState(mockDocuments);
+  const [documents, setDocuments] = useState<DocType[]>([]);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<DocType | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingDocuments, setIsFetchingDocuments] = useState(true);
 
-  const documentsWithClient = documents.map((doc) => {
-    const client = mockClients.find((c) => c.id === doc.clientId);
-    return { ...doc, clientName: client?.name || 'Unknown' };
-  });
+  // Fetch documents from API
+  useEffect(() => {
+    const fetchDocuments = async () => {
+      try {
+        setIsFetchingDocuments(true);
+        const response = await apiService.getDocuments({
+          status: statusFilter !== 'all' ? statusFilter : undefined,
+        });
+        
+        console.log('Documents API response:', response);
+        
+        // Handle the response structure from the API
+        const docs = response?.documents || [];
+        console.log('Extracted documents:', docs);
+        setDocuments(docs);
+      } catch (error) {
+        console.error('Failed to fetch documents:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load documents from database.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsFetchingDocuments(false);
+      }
+    };
+
+    fetchDocuments();
+  }, [statusFilter, toast]);
+
+  const documentsWithClient = documents.map((doc) => ({
+    ...doc,
+    clientName: (doc as any).client_name || 'Unknown',
+  }));
 
   const filteredDocs = documentsWithClient.filter((doc) => {
     if (statusFilter !== 'all' && doc.status !== statusFilter) return false;
-    if (search && !doc.name.toLowerCase().includes(search.toLowerCase()) &&
-        !doc.clientName.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search) {
+      const nameMatch = doc.name?.toLowerCase().includes(search.toLowerCase());
+      const clientMatch = doc.clientName?.toLowerCase().includes(search.toLowerCase());
+      if (!nameMatch && !clientMatch) return false;
+    }
     return true;
   });
 
@@ -131,9 +165,18 @@ export default function Documents() {
           </Select>
         </div>
 
+        {/* Loading State */}
+        {isFetchingDocuments && (
+          <div className="text-center py-12 animate-fade-in">
+            <Loader2 className="h-12 w-12 mx-auto text-muted-foreground mb-4 animate-spin" />
+            <p className="text-muted-foreground">Loading documents...</p>
+          </div>
+        )}
+
         {/* Documents Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredDocs.map((doc, index) => (
+        {!isFetchingDocuments && (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {filteredDocs.map((doc, index) => (
             <Card 
               key={doc.id} 
               className="transition-all duration-300 hover:shadow-md hover:-translate-y-1"
@@ -153,8 +196,8 @@ export default function Documents() {
                   <StatusBadge status={doc.status} type="document" />
                 </div>
                 <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Version {doc.version}</span>
-                  <span>{doc.type}</span>
+                  <span>Version {(doc as any).version || 1}</span>
+                  <span>{(doc as any).type || 'document'}</span>
                 </div>
                 <div className="mt-3 flex gap-2">
                   {doc.status === 'missing' && hasPermission(PERMISSIONS.REQUEST_DOCUMENTS) && (
@@ -183,9 +226,10 @@ export default function Documents() {
               </CardContent>
             </Card>
           ))}
-        </div>
+          </div>
+        )}
 
-        {filteredDocs.length === 0 && (
+        {!isFetchingDocuments && filteredDocs.length === 0 && (
           <div className="text-center py-12 animate-fade-in">
             <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <p className="text-muted-foreground">No documents found.</p>
