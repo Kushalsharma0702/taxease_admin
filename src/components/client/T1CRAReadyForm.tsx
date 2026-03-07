@@ -44,45 +44,57 @@ function convertApiDataToFormData(t1Data: any) {
   const answersMap: Record<string, any> = {};
   
   t1Data.answers.forEach((answer: any) => {
+    if (!answer.field_key) return;
     const keys = answer.field_key.split('.');
-    let current = answersMap;
-    
+    let current: any = answersMap;
+    let valid = true;
+
     for (let i = 0; i < keys.length - 1; i++) {
       const key = keys[i];
-      
+
       // Handle array notation like children[0]
       const arrayMatch = key.match(/^(.+)\[(\d+)\]$/);
       if (arrayMatch) {
         const arrayName = arrayMatch[1];
         const index = parseInt(arrayMatch[2]);
-        
-        if (!current[arrayName]) {
-          current[arrayName] = [];
-        }
-        if (!current[arrayName][index]) {
+        if (!Array.isArray(current[arrayName])) current[arrayName] = [];
+        if (!current[arrayName][index] || typeof current[arrayName][index] !== 'object') {
           current[arrayName][index] = {};
         }
         current = current[arrayName][index];
       } else {
-        if (!current[key]) {
+        // If the key already holds a primitive, convert it to an object so
+        // deeper paths don't throw "Cannot create property on boolean/string"
+        if (current[key] === null || current[key] === undefined) {
+          current[key] = {};
+        } else if (typeof current[key] !== 'object') {
           current[key] = {};
         }
         current = current[key];
       }
+
+      if (current === null || current === undefined || typeof current !== 'object') {
+        valid = false;
+        break;
+      }
     }
-    
+
+    if (!valid) return;
+
     const lastKey = keys[keys.length - 1];
     const arrayMatch = lastKey.match(/^(.+)\[(\d+)\]$/);
-    
-    if (arrayMatch) {
-      const arrayName = arrayMatch[1];
-      const index = parseInt(arrayMatch[2]);
-      if (!current[arrayName]) {
-        current[arrayName] = [];
+
+    try {
+      if (arrayMatch) {
+        const arrayName = arrayMatch[1];
+        const index = parseInt(arrayMatch[2]);
+        if (!Array.isArray(current[arrayName])) current[arrayName] = [];
+        current[arrayName][index] = answer.value;
+      } else {
+        current[lastKey] = answer.value;
       }
-      current[arrayName][index] = answer.value;
-    } else {
-      current[lastKey] = answer.value;
+    } catch {
+      // Skip fields that can't be set (primitive collision)
     }
   });
   
@@ -123,10 +135,63 @@ function convertApiDataToFormData(t1Data: any) {
     });
   };
   
-  console.log('Raw answersMap:', answersMap);
-  console.log('rrspContributions array:', answersMap.rrspContributions);
-  console.log('childArtSportActivities array:', answersMap.childArtSportActivities);
-  console.log('provinceRent:', answersMap.provinceRent);
+  // ── Field-name normalization ──────────────────────────────────────────────
+  // The mobile app uses different field names than what the component expects.
+  // Map actual DB field_key names → expected component names here.
+
+  // 1. childArtSportEntries → childArtSportActivities
+  if (answersMap.childArtSportEntries && !answersMap.childArtSportActivities) {
+    answersMap.childArtSportActivities = answersMap.childArtSportEntries;
+  }
+
+  // 2. movingExpenseIndividual → movingExpenses (remap field names)
+  const meiSrc = answersMap.movingExpenseIndividual || {};
+  if ((answersMap.movingExpenseForIndividual || answersMap.hasMovingExpenses) &&
+      Object.keys(meiSrc).length && !answersMap.movingExpenses) {
+    const airTickets   = parseFloat(meiSrc.airTicketCost)         || 0;
+    const movers       = parseFloat(meiSrc.moversAndPackers)       || 0;
+    const meals        = parseFloat(meiSrc.mealsAndOtherCost)      || 0;
+    const other        = parseFloat(meiSrc.anyOtherCost)           || 0;
+    answersMap.movingExpenses = {
+      applicable:               true,
+      distanceFromOldToNew:     meiSrc.distanceFromOldToNew    || '',
+      distanceFromNewToOffice:  meiSrc.distanceFromNewToOffice || '',
+      dateOfTravel:             meiSrc.dateOfTravel            || '',
+      airTicketsCost:           airTickets,
+      moversPackersCost:        movers,
+      travelMealsCost:          meals,
+      otherMovingCosts:         other,
+      totalMovingCost:          airTickets + movers + meals + other,
+      dateJoinedCompany:        meiSrc.dateOfJoining           || '',
+      companyName:              meiSrc.companyName             || '',
+      employerAddress:          meiSrc.newEmployerAddress      || '',
+      incomeEarnedAfterMove:    parseFloat(meiSrc.grossIncomeAfterMoving) || 0,
+      oldAddress:               meiSrc.oldAddress              || '',
+      newAddress:               meiSrc.newAddress              || '',
+    };
+  }
+
+  // 3. daycareExpenses: remap childcareProvider → providerName
+  if (Array.isArray(answersMap.daycareExpenses)) {
+    answersMap.daycareExpenses = answersMap.daycareExpenses.map((d: any) => ({
+      ...d,
+      providerName: d.providerName || d.childcareProvider || '',
+      childName:    d.childName    || d.name              || '',
+    }));
+  }
+
+  // 4. workFromHomeExpense → workFromHome
+  if (answersMap.workFromHomeExpense && !answersMap.workFromHome) {
+    answersMap.workFromHome = answersMap.workFromHomeExpense;
+  }
+
+  // 5. disabilityClaimMembers: map approved_year → approvedYear
+  if (Array.isArray(answersMap.disabilityClaimMembers)) {
+    answersMap.disabilityClaimMembers = answersMap.disabilityClaimMembers.map((d: any) => ({
+      ...d,
+      approvedYear: d.approvedYear || d.approved_year || '',
+    }));
+  }
   
   // Convert medical expenses array
   const medicalExpenses = answersMap.medicalExpenses ? convertArray(answersMap.medicalExpenses, {

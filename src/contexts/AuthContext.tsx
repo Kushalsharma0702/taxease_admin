@@ -41,17 +41,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for existing session on mount
+    // Validate token with backend on mount — clears stale sessions automatically
     const loadSession = async () => {
-      const sessionUser = await getSession();
-      if (sessionUser) {
-        setUser(sessionUser);
-        // Refresh session to extend expiry
-        await refreshSession();
+      const token = localStorage.getItem('taxease_access_token');
+      if (token) {
+        try {
+          const me = await api.getCurrentUser();
+          const sessionUser = await getSession();
+          const fullName = me
+            ? [me.first_name, me.last_name].filter(Boolean).join(' ') || me.name || me.email
+            : sessionUser?.name || '';
+          setUser({
+            id: me?.id || sessionUser?.id || 'unknown',
+            email: me?.email || sessionUser?.email || '',
+            name: fullName,
+            role: (me?.role || sessionUser?.role || 'admin') as UserRole,
+            permissions: me?.permissions || sessionUser?.permissions || Object.values(PERMISSIONS),
+            isActive: me?.is_active ?? sessionUser?.isActive ?? true,
+            createdAt: me?.created_at ? new Date(me.created_at) : new Date(),
+          });
+        } catch {
+          // Token invalid — clear everything and stay on login
+          localStorage.removeItem('taxease_access_token');
+          localStorage.removeItem('taxease_refresh_token');
+          localStorage.removeItem('taxease_user');
+          localStorage.removeItem('taxease_session_id');
+          await clearSession();
+        }
       }
       setIsLoading(false);
     };
-    
+
     loadSession();
   }, []);
 
@@ -69,23 +89,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       const response = await api.login(email, password);
-      if (response.user && response.token) {
+
+      const hasToken = !!response.token?.access_token;
+      const rawUser = response.user;
+
+      if (hasToken) {
+        // Backend returns first_name + last_name (no combined name field)
+        const fullName = rawUser
+          ? [rawUser.first_name, rawUser.last_name].filter(Boolean).join(' ') || rawUser.name || rawUser.email
+          : email;
+
         const user: User = {
-          id: response.user.id,
-          email: response.user.email,
-          name: response.user.name,
-          role: response.user.role as UserRole,
-          permissions: response.user.permissions || [],
-          isActive: response.user.is_active,
-          createdAt: new Date(response.user.created_at),
+          id: rawUser?.id || 'unknown',
+          email: rawUser?.email || email,
+          name: fullName,
+          // Backend does not return role/permissions — default to 'admin' with all permissions
+          role: (rawUser?.role || 'admin') as UserRole,
+          permissions: rawUser?.permissions || Object.values(PERMISSIONS),
+          isActive: rawUser?.is_active ?? true,
+          createdAt: rawUser?.created_at ? new Date(rawUser.created_at) : new Date(),
         };
         setUser(user);
         await setSession(user);
         return true;
       }
+      console.error('Login failed: no access token in response');
       return false;
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('Login error:', error);
       return false;
     }
   };

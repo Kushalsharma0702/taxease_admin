@@ -1,177 +1,248 @@
 """
-T1 Forms endpoints - Access client backend T1 forms from admin backend
+T1 Forms admin routes — reads from production t1_forms + t1_answers tables.
+Exposes both /t1-forms/ and /tax/t1-personal to match what the frontend expects.
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import Optional
+from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import Optional, List
-import httpx
-import os
-from datetime import datetime
+from sqlalchemy import text
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_admin
-from app.models.client import Client
-from app.schemas.t1_form import T1FormListResponse, T1FormResponse
-import logging
 
-logger = logging.getLogger(__name__)
-
-router = APIRouter(prefix="/t1-forms", tags=["T1 Forms"])
-
-# Client backend URL
-CLIENT_BACKEND_URL = os.getenv("CLIENT_BACKEND_URL", "http://localhost:8001/api/v1")
+router = APIRouter()
+tax_router = APIRouter()   # mounted at /tax/t1-personal
 
 
-@router.get("", response_model=T1FormListResponse)
-async def get_t1_forms(
-    client_id: Optional[str] = Query(None, description="Filter by client ID"),
-    client_email: Optional[str] = Query(None, description="Filter by client email"),
-    status_filter: Optional[str] = Query(None, description="Filter by status"),
-    limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+# ─── Helper ───────────────────────────────────────────────────────────────────
+
+async def _get_t1_forms(db: AsyncSession, filing_id: Optional[str] = None,
+                        user_id: Optional[str] = None) -> list[dict]:
+    """Fetch T1 forms with client info from production tables."""
+    where = ""
+    params: dict = {}
+    if filing_id:
+        where = "WHERE tf.filing_id = :filing_id"
+        params["filing_id"] = filing_id
+    elif user_id:
+        where = "WHERE tf.user_id = :user_id"
+        params["user_id"] = user_id
+
+    sql = text(f"""
+        SELECT
+            tf.id,
+            tf.filing_id,
+            tf.user_id,
+            tf.status,
+            tf.is_locked,
+            tf.completion_percentage,
+            tf.last_saved_step_id,
+            tf.submitted_at,
+            tf.review_notes,
+            tf.created_at,
+            tf.updated_at,
+            u.first_name || ' ' || u.last_name  AS client_name,
+            u.email                              AS client_email,
+            u.phone                              AS client_phone,
+            f.filing_year,
+            f.status                             AS filing_status,
+            (SELECT COUNT(*) FROM t1_answers ta
+             WHERE ta.t1_form_id = tf.id)         AS answers_count
+        FROM t1_forms tf
+        JOIN users  u ON u.id = tf.user_id
+        JOIN filings f ON f.id = tf.filing_id
+        {where}
+        ORDER BY tf.created_at DESC
+    """)
+    result = await db.execute(sql, params)
+    rows = result.fetchall()
+
+    forms = []
+    for r in rows:
+        forms.append({
+            "id":                   str(r.id),
+            "filing_id":            str(r.filing_id),
+            "user_id":              str(r.user_id),
+            "status":               r.status,
+            "is_locked":            r.is_locked,
+            "completion_percentage": r.completion_percentage,
+            "last_saved_step_id":   r.last_saved_step_id,
+            "submitted_at":         r.submitted_at.isoformat() if r.submitted_at else None,
+            "review_notes":         r.review_notes,
+            "created_at":           r.created_at.isoformat() if r.created_at else None,
+            "updated_at":           r.updated_at.isoformat() if r.updated_at else None,
+            # Client info (admin view)
+            "client_name":          r.client_name,
+            "client_email":         r.client_email,
+            "client_phone":         r.client_phone,
+            "filing_year":          r.filing_year,
+            "filing_status":        r.filing_status,
+            "answers_count":        int(r.answers_count or 0),
+            # Compat fields for frontend
+            "tax_year":             r.filing_year,
+            "name":                 r.client_name,
+            "email":                r.client_email,
+        })
+    return forms
+
+
+async def _get_t1_answers(db: AsyncSession, form_id: str) -> list[dict]:
+    """Fetch all answers for a T1 form."""
+    sql = text("""
+        SELECT id, field_key,
+               value_boolean, value_text, value_numeric, value_date, value_array,
+               created_at, updated_at
+        FROM t1_answers
+        WHERE t1_form_id = :form_id
+        ORDER BY field_key
+    """)
+    result = await db.execute(sql, {"form_id": form_id})
+    rows = []
+    for r in result.fetchall():
+        # Resolve the actual value — use `is not None` to correctly handle False
+        if r.value_text is not None:
+            value = r.value_text
+        elif r.value_numeric is not None:
+            value = float(r.value_numeric)
+        elif r.value_boolean is not None:
+            value = r.value_boolean          # preserves False
+        elif r.value_date is not None:
+            value = r.value_date.isoformat()
+        elif r.value_array is not None:
+            value = r.value_array
+        else:
+            value = None
+        rows.append({
+            "id":            str(r.id),
+            "field_key":     r.field_key,
+            "value":         value,
+            "value_text":    r.value_text,
+            "value_numeric": float(r.value_numeric) if r.value_numeric is not None else None,
+            "value_boolean": r.value_boolean,
+            "value_date":    r.value_date.isoformat() if r.value_date else None,
+            "value_array":   r.value_array,
+            "created_at":    r.created_at.isoformat() if r.created_at else None,
+        })
+    return rows
+
+
+# ─── /t1-forms/ routes ────────────────────────────────────────────────────────
+
+@router.get("/")
+async def get_all_t1_forms(
+    filing_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_admin = Depends(get_current_admin)
 ):
-    """
-    Get T1 forms from database (both backends use same database)
-    Admin can view all T1 forms or filter by client
-    """
+    """List all T1 forms (admin view of all clients)."""
+    forms = await _get_t1_forms(db, filing_id=filing_id)
+    return forms
+
+
+@router.get("/{form_id}")
+async def get_t1_form(
+    form_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_admin = Depends(get_current_admin)
+):
+    """Get a specific T1 form with all answers."""
+    sql = text("""
+        SELECT tf.*, 
+               u.first_name || ' ' || u.last_name AS client_name,
+               u.email AS client_email, u.phone AS client_phone,
+               f.filing_year, f.status AS filing_status
+        FROM t1_forms tf
+        JOIN users u ON u.id = tf.user_id
+        JOIN filings f ON f.id = tf.filing_id
+        WHERE tf.id = :id
+    """)
+    result = await db.execute(sql, {"id": str(form_id)})
+    row = result.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="T1 form not found")
+
+    answers = await _get_t1_answers(db, str(form_id))
+
+    # Build sections progress (column name may vary)
     try:
-        from sqlalchemy import text
-        from uuid import UUID as PyUUID
-        
-        # Since both backends use the same database, query directly
-        # Support both t1_personal_forms (legacy) and t1_forms_main (new schema)
-        
-        # Build base query - union of both table schemas
-        base_query = """
-            SELECT * FROM (
-                SELECT
-                    t1.id::text as id,
-                    t1.user_id::text as user_id,
-                    COALESCE(t1.tax_year, EXTRACT(YEAR FROM t1.created_at)::int) as tax_year,
-                    t1.status as status,
-                    t1.first_name as first_name,
-                    t1.last_name as last_name,
-                    COALESCE(t1.email, u.email) as client_email,
-                    t1.created_at as created_at,
-                    t1.updated_at as updated_at,
-                    t1.submitted_at as submitted_at
-                FROM t1_personal_forms t1
-                LEFT JOIN users u ON t1.user_id = u.id
-                
-                UNION ALL
-                
-                SELECT
-                    tm.id::text as id,
-                    tm.user_id::text as user_id,
-                    EXTRACT(YEAR FROM tm.created_at)::int as tax_year,
-                    tm.status as status,
-                    pi.first_name as first_name,
-                    pi.last_name as last_name,
-                    COALESCE(pi.email, u.email) as client_email,
-                    tm.created_at as created_at,
-                    tm.updated_at as updated_at,
-                    CASE WHEN tm.status = 'submitted' THEN tm.updated_at ELSE NULL END as submitted_at
-                FROM t1_forms_main tm
-                LEFT JOIN t1_personal_info pi ON pi.form_id = tm.id
-                LEFT JOIN users u ON tm.user_id = u.id
-            ) forms
-        """
-        
-        # Build conditions
-        conditions = []
-        params = {}
-        
-        if client_id:
-            try:
-                # Convert client_id to user_id by looking up client
-                client_result = await db.execute(select(Client).where(Client.id == client_id))
-                client = client_result.scalar_one_or_none()
-                if client:
-                    # Find user by email (clients and users share email)
-                    user_query = text("SELECT id FROM users WHERE LOWER(email) = LOWER(:email)")
-                    user_result = await db.execute(user_query, {"email": client.email})
-                    user_row = user_result.fetchone()
-                    if user_row:
-                        conditions.append("forms.user_id = :user_id")
-                        params["user_id"] = str(user_row[0])
-                    else:
-                        # If no user found, return empty result
-                        return {
-                            "forms": [],
-                            "total": 0,
-                            "offset": offset,
-                            "limit": limit
-                        }
-            except Exception as e:
-                logger.warning(f"Could not resolve client_id to user_id: {e}")
-        
-        if client_email:
-            # Find user by email
-            user_query = text("SELECT id FROM users WHERE LOWER(email) = LOWER(:email)")
-            user_result = await db.execute(user_query, {"email": client_email})
-            user_row = user_result.fetchone()
-            if user_row:
-                conditions.append("forms.user_id = :user_id")
-                params["user_id"] = str(user_row[0])
-        
-        if status_filter:
-            conditions.append("forms.status = :status")
-            params["status"] = status_filter
-        
-        # Build final query
-        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
-        query_sql = base_query + where_clause + " ORDER BY forms.created_at DESC LIMIT :limit OFFSET :offset"
-        count_sql = "SELECT COUNT(*) FROM (" + base_query + where_clause + ") count_forms"
-        
-        params["limit"] = limit
-        params["offset"] = offset
-        
-        # Execute query
-        result = await db.execute(text(query_sql), params)
-        rows = result.fetchall()
-        
-        # Get total count
-        count_params = {k: v for k, v in params.items() if k not in ["limit", "offset"]}
-        count_result = await db.execute(text(count_sql), count_params)
-        total = count_result.scalar() or 0
-        
-        # Format response
-        forms = []
-        for row in rows:
-            forms.append({
-                "id": row[0],
-                "user_id": row[1],
-                "tax_year": int(row[2]) if row[2] else datetime.utcnow().year,
-                "status": row[3] or "draft",
-                "first_name": row[4],
-                "last_name": row[5],
-                "client_email": row[6],
-                "created_at": row[7].isoformat() if row[7] else None,
-                "updated_at": row[8].isoformat() if row[8] else None,
-                "submitted_at": row[9].isoformat() if row[9] else None
-            })
-        
-        logger.info(f"Retrieved {len(forms)} T1 forms (total: {total})")
-        
-        return {
-            "forms": forms,
-            "total": total,
-            "offset": offset,
-            "limit": limit
-        }
-                
-    except Exception as e:
-        logger.error(f"Error fetching T1 forms: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
+        sections_sql = text("""
+            SELECT * FROM t1_sections_progress
+            WHERE t1_form_id = :form_id
+            ORDER BY 1
+        """)
+        sections_result = await db.execute(sections_sql, {"form_id": str(form_id)})
+        sections = [dict(zip(r._fields, r)) for r in sections_result.fetchall()]
+    except Exception:
+        sections = []
+
+    return {
+        "id":                   str(row.id),
+        "filing_id":            str(row.filing_id),
+        "user_id":              str(row.user_id),
+        "status":               row.status,
+        "is_locked":            row.is_locked,
+        "completion_percentage": row.completion_percentage,
+        "last_saved_step_id":   row.last_saved_step_id,
+        "submitted_at":         row.submitted_at.isoformat() if row.submitted_at else None,
+        "review_notes":         row.review_notes,
+        "created_at":           row.created_at.isoformat() if row.created_at else None,
+        "updated_at":           row.updated_at.isoformat() if row.updated_at else None,
+        "client_name":          row.client_name,
+        "client_email":         row.client_email,
+        "client_phone":         row.client_phone,
+        "filing_year":          row.filing_year,
+        "filing_status":        row.filing_status,
+        "tax_year":             row.filing_year,
+        "answers":              answers,
+        "sections":             sections,
+        "answers_count":        len(answers),
+    }
 
 
+@router.patch("/{form_id}")
+async def update_t1_form(
+    form_id: UUID,
+    data: dict,
+    db: AsyncSession = Depends(get_db),
+    current_admin = Depends(get_current_admin)
+):
+    """Update T1 form review notes / status."""
+    allowed = {"review_notes", "status"}
+    updates = {k: v for k, v in data.items() if k in allowed}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+
+    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+    updates["form_id"] = str(form_id)
+    await db.execute(
+        text(f"UPDATE t1_forms SET {set_clause}, updated_at = NOW() WHERE id = :form_id"),
+        updates
+    )
+    await db.commit()
+    return {"message": "Updated", "id": str(form_id)}
 
 
+# ─── /tax/t1-personal routes (compat alias) ───────────────────────────────────
+
+@tax_router.get("")
+async def get_t1_personal_forms(
+    db: AsyncSession = Depends(get_db),
+    current_admin = Depends(get_current_admin)
+):
+    """T1 personal forms — admin view (alias for /t1-forms/)."""
+    return await _get_t1_forms(db)
 
 
+@tax_router.get("/{form_id}")
+async def get_t1_personal_form(
+    form_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_admin = Depends(get_current_admin)
+):
+    """Get specific T1 personal form."""
+    forms = await _get_t1_forms(db)
+    match = next((f for f in forms if f["id"] == str(form_id)), None)
+    if not match:
+        raise HTTPException(status_code=404, detail="T1 form not found")
+    return match

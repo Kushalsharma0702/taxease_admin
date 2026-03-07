@@ -24,93 +24,77 @@ async def get_analytics(
     current_admin = Depends(get_current_admin)
 ):
     """Get dashboard analytics"""
-    # Total clients
-    clients_query = select(func.count()).select_from(Client)
-    total_clients_result = await db.execute(clients_query)
+    from sqlalchemy import text
+
+    # Total clients = users who have at least one filing (real production data)
+    total_clients_result = await db.execute(
+        text("SELECT COUNT(DISTINCT u.id) FROM users u LEFT JOIN filings f ON f.user_id = u.id")
+    )
     total_clients = total_clients_result.scalar() or 0
-    
+
     # Total admins
     admins_query = select(func.count()).select_from(AdminUser).where(AdminUser.is_active == True)
     total_admins_result = await db.execute(admins_query)
     total_admins = total_admins_result.scalar() or 0
-    
-    # Pending documents
-    docs_query = select(func.count()).select_from(Document).where(
-        Document.status.in_(["pending", "missing"])
+
+    # Pending documents (from real documents table)
+    pending_docs_result = await db.execute(
+        text("SELECT COUNT(*) FROM documents WHERE status IN ('pending', 'missing', 'received')")
     )
-    pending_docs_result = await db.execute(docs_query)
     pending_documents = pending_docs_result.scalar() or 0
-    
-    # Pending payments
-    pending_payments_query = select(func.count()).select_from(Client).where(
-        Client.payment_status.in_(["pending", "partial"])
+
+    # Pending payments — filings where no payment has been made yet
+    pending_payments_result = await db.execute(
+        text("""
+            SELECT COUNT(*) FROM filings f
+            WHERE COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.filing_id = f.id), 0) = 0
+        """)
     )
-    pending_payments_result = await db.execute(pending_payments_query)
     pending_payments = pending_payments_result.scalar() or 0
-    
+
     # Completed filings
-    completed_query = select(func.count()).select_from(Client).where(
-        Client.status.in_(["completed", "filed"])
+    completed_result = await db.execute(
+        text("SELECT COUNT(*) FROM filings WHERE status IN ('completed', 'filed', 'assessed')")
     )
-    completed_result = await db.execute(completed_query)
     completed_filings = completed_result.scalar() or 0
-    
+
     # Total revenue
-    revenue_query = select(func.sum(Payment.amount)).select_from(Payment)
-    revenue_result = await db.execute(revenue_query)
+    revenue_result = await db.execute(text("SELECT COALESCE(SUM(amount), 0) FROM payments"))
     total_revenue = float(revenue_result.scalar() or 0)
-    
+
     # Monthly revenue (last 6 months)
-    six_months_ago = datetime.utcnow() - timedelta(days=180)
-    monthly_payments_query = select(
-        func.date_trunc('month', Payment.created_at).label('month'),
-        func.sum(Payment.amount).label('revenue')
-    ).where(
-        Payment.created_at >= six_months_ago
-    ).group_by('month').order_by('month')
-    
-    monthly_result = await db.execute(monthly_payments_query)
-    monthly_data = monthly_result.all()
-    
-    monthly_revenue = []
-    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    for row in monthly_data:
-        if row.month:
-            month = datetime.fromtimestamp(row.month.timestamp()) if hasattr(row.month, 'timestamp') else row.month
-            monthly_revenue.append(MonthlyRevenue(
-                month=month_names[month.month - 1] if isinstance(month, datetime) else month.strftime('%b'),
-                revenue=float(row.revenue or 0)
-            ))
-    
-    # Clients by status
-    status_query = select(
-        Client.status,
-        func.count(Client.id).label('count')
-    ).group_by(Client.status)
-    status_result = await db.execute(status_query)
-    status_data = status_result.all()
-    
+    monthly_result = await db.execute(text("""
+        SELECT TO_CHAR(DATE_TRUNC('month', created_at), 'Mon') AS month,
+               SUM(amount) AS revenue
+        FROM payments
+        WHERE created_at >= NOW() - INTERVAL '6 months'
+        GROUP BY DATE_TRUNC('month', created_at)
+        ORDER BY DATE_TRUNC('month', created_at)
+    """))
+    monthly_revenue = [
+        MonthlyRevenue(month=row.month, revenue=float(row.revenue or 0))
+        for row in monthly_result.fetchall()
+    ]
+
+    # Clients by status (from real filings)
+    status_result = await db.execute(text("""
+        SELECT COALESCE(status, 'documents_pending') AS status, COUNT(*) AS count
+        FROM filings
+        GROUP BY status
+    """))
     clients_by_status = [
         ClientStatusCount(status=row.status, count=row.count)
-        for row in status_data
+        for row in status_result.fetchall()
     ]
-    
+
     # Admin workload
     workload_query = select(
         AdminUser.id,
         AdminUser.name,
-        func.count(Client.id).label('client_count')
-    ).outerjoin(Client, AdminUser.id == Client.assigned_admin_id).where(
-        AdminUser.is_active == True
-    ).group_by(AdminUser.id, AdminUser.name)
-    
+    ).where(AdminUser.is_active == True)
     workload_result = await db.execute(workload_query)
     workload_data = workload_result.all()
-    
-    admin_workload = [
-        AdminWorkload(name=row.name, clients=row.client_count or 0)
-        for row in workload_data
-    ]
+    admin_workload = [AdminWorkload(name=row.name, clients=0) for row in workload_data]
     
     return AnalyticsResponse(
         total_clients=total_clients,

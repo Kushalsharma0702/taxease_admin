@@ -32,7 +32,7 @@ class DocumentUpdate(BaseModel):
 class DocumentResponse(DocumentBase):
     """Document response schema"""
     id: UUID
-    client_id: UUID
+    client_id: Optional[UUID] = None
     client_name: Optional[str] = None
     version: int
     uploaded_at: Optional[datetime] = None

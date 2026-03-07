@@ -9,15 +9,20 @@ from .documents import router as documents_router
 from .payments import router as payments_router
 from .analytics import router as analytics_router
 from .audit_logs import router as audit_logs_router
+from .t1_forms import router as t1_forms_router, tax_router as t1_tax_router
+from .filings import router as filings_router
 
 api_router = APIRouter()
 
-api_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+api_router.include_router(auth_router,        prefix="/auth",        tags=["Authentication"])
 api_router.include_router(admin_users_router, prefix="/admin-users", tags=["Admin Users"])
-api_router.include_router(clients_router, prefix="/clients", tags=["Clients"])
-api_router.include_router(documents_router, prefix="/documents", tags=["Documents"])
-api_router.include_router(payments_router, prefix="/payments", tags=["Payments"])
-api_router.include_router(analytics_router, prefix="/analytics", tags=["Analytics"])
-api_router.include_router(audit_logs_router, prefix="/audit-logs", tags=["Audit Logs"])
+api_router.include_router(clients_router,     prefix="/clients",     tags=["Clients"])
+api_router.include_router(documents_router,   prefix="/documents",   tags=["Documents"])
+api_router.include_router(payments_router,    prefix="/payments",    tags=["Payments"])
+api_router.include_router(analytics_router,   prefix="/analytics",   tags=["Analytics"])
+api_router.include_router(audit_logs_router,  prefix="/audit-logs",  tags=["Audit Logs"])
+api_router.include_router(t1_forms_router,    prefix="/t1-forms",    tags=["T1 Forms"])
+api_router.include_router(t1_tax_router,      prefix="/tax/t1-personal", tags=["T1 Personal"])
+api_router.include_router(filings_router,     prefix="/filings",     tags=["Filings"])
 
 

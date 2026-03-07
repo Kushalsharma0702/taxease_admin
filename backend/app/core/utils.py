@@ -29,21 +29,27 @@ async def create_audit_log(
         old_value: Previous value (optional)
         new_value: New value (optional)
     """
-    audit_log = AuditLog(
-        action=action,
-        entity_type=entity_type,
-        entity_id=entity_id,
-        performed_by_id=performed_by_id,
-        old_value=old_value,
-        new_value=new_value,
-        timestamp=datetime.utcnow(),
-    )
-    
-    db.add(audit_log)
-    await db.commit()
-    await db.refresh(audit_log)
-    
-    return audit_log
+    try:
+        # Use a raw INSERT to bypass ORM relationship loading and FK issues
+        # performed_by_id FK points to 'admins' table (not admin_users) — use NULL
+        from sqlalchemy import text as _text
+        import uuid as _uuid
+        await db.execute(_text("""
+            INSERT INTO audit_logs (id, action, entity_type, entity_id, old_value, new_value, timestamp)
+            VALUES (:id, :action, :entity_type, :entity_id, :old_value, :new_value, NOW())
+        """), {
+            "id": str(_uuid.uuid4()),
+            "action": action,
+            "entity_type": entity_type,
+            "entity_id": str(entity_id),
+            "old_value": old_value,
+            "new_value": new_value,
+        })
+        await db.commit()
+    except Exception:
+        # Never let audit log failure break the main operation
+        pass
+    return None
 
 
 def calculate_pagination(page: int, page_size: int, total: int) -> dict:

@@ -1,8 +1,8 @@
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatCard } from '@/components/ui/stat-card';
-import { getAnalyticsData, mockClients, mockDocuments, mockAdmins } from '@/data/mockData';
-import { Users, FileText, DollarSign, CheckCircle, TrendingUp, Calendar } from 'lucide-react';
+import { Users, FileText, DollarSign, CheckCircle, TrendingUp, Calendar, Loader2 } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -18,45 +18,44 @@ import {
   Line,
   Legend,
 } from 'recharts';
+import { apiService } from '@/services/api';
+import { useToast } from '@/hooks/use-toast';
 
 const COLORS = ['hsl(200, 98%, 39%)', 'hsl(213, 93%, 67%)', 'hsl(120, 40%, 50%)', 'hsl(40, 90%, 50%)', 'hsl(0, 70%, 50%)'];
 
 export default function Analytics() {
-  const analytics = getAnalyticsData();
+  const { toast } = useToast();
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filingsByYear = [
-    { year: '2022', count: 45 },
-    { year: '2023', count: 62 },
-    { year: '2024', count: mockClients.filter((c) => c.filingYear === 2024).length },
-  ];
-
-  const documentStats = [
-    { type: 'T4 Slips', count: mockDocuments.filter((d) => d.name.includes('T4')).length },
-    { type: 'T5 Slips', count: mockDocuments.filter((d) => d.name.includes('T5')).length },
-    { type: 'RRSP', count: mockDocuments.filter((d) => d.name.includes('RRSP')).length },
-    { type: 'Medical', count: mockDocuments.filter((d) => d.name.includes('Medical')).length },
-    { type: 'Other', count: 3 },
-  ];
-
-  const monthlyTrend = [
-    { month: 'Jan', clients: 12, revenue: 4800 },
-    { month: 'Feb', clients: 15, revenue: 6200 },
-    { month: 'Mar', clients: 22, revenue: 9100 },
-    { month: 'Apr', clients: 28, revenue: 11500 },
-    { month: 'May', clients: 18, revenue: 7200 },
-    { month: 'Jun', clients: 10, revenue: 4100 },
-  ];
-
-  const adminPerformance = mockAdmins.filter((a) => a.isActive).map((admin) => {
-    const clients = mockClients.filter((c) => c.assignedAdminId === admin.id);
-    const completed = clients.filter((c) => c.status === 'completed' || c.status === 'filed').length;
-    return {
-      name: admin.name,
-      totalClients: clients.length,
-      completed,
-      pending: clients.length - completed,
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        const data = await apiService.getAnalytics();
+        setAnalytics(data);
+      } catch (error) {
+        console.error('Failed to fetch analytics:', error);
+        toast({ title: 'Error', description: 'Failed to load analytics.', variant: 'destructive' });
+      } finally {
+        setIsLoading(false);
+      }
     };
-  });
+    fetchAnalytics();
+  }, [toast]);
+
+  if (isLoading) {
+    return (
+      <DashboardLayout title="Analytics & Reports" breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Analytics' }]}>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-12 w-12 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const clientsByStatus = analytics?.clients_by_status || analytics?.clientsByStatus || [];
+  const monthlyRevenue = analytics?.monthly_revenue || analytics?.monthlyRevenue || [];
+  const adminWorkload = analytics?.admin_workload || analytics?.adminWorkload || [];
 
   return (
     <DashboardLayout
@@ -68,24 +67,24 @@ export default function Analytics() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="Total Clients"
-            value={analytics.totalClients}
+            value={analytics?.total_clients || analytics?.totalClients || 0}
             icon={Users}
             trend={{ value: 15, isPositive: true }}
           />
           <StatCard
             title="Total Revenue"
-            value={`$${analytics.totalRevenue.toLocaleString()}`}
+            value={`$${(analytics?.total_revenue || analytics?.totalRevenue || 0).toLocaleString()}`}
             icon={DollarSign}
             trend={{ value: 8, isPositive: true }}
           />
           <StatCard
             title="Completed Filings"
-            value={analytics.completedFilings}
+            value={analytics?.completed_filings || analytics?.completedFilings || 0}
             icon={CheckCircle}
           />
           <StatCard
-            title="Documents Processed"
-            value={mockDocuments.filter((d) => d.status === 'complete').length}
+            title="Pending Documents"
+            value={analytics?.pending_documents || analytics?.pendingDocuments || 0}
             icon={FileText}
           />
         </div>
@@ -100,7 +99,7 @@ export default function Analytics() {
             <CardContent>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthlyTrend}>
+                  <LineChart data={monthlyRevenue.length > 0 ? monthlyRevenue : [{ month: 'No data', revenue: 0 }]}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="month" className="text-xs" />
                     <YAxis yAxisId="left" className="text-xs" />
@@ -116,18 +115,10 @@ export default function Analytics() {
                     <Line
                       yAxisId="left"
                       type="monotone"
-                      dataKey="clients"
+                      dataKey="revenue"
                       stroke="hsl(200, 98%, 39%)"
                       strokeWidth={2}
                       dot={{ fill: 'hsl(200, 98%, 39%)' }}
-                    />
-                    <Line
-                      yAxisId="right"
-                      type="monotone"
-                      dataKey="revenue"
-                      stroke="hsl(120, 40%, 50%)"
-                      strokeWidth={2}
-                      dot={{ fill: 'hsl(120, 40%, 50%)' }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -145,7 +136,7 @@ export default function Analytics() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={analytics.clientsByStatus}
+                      data={clientsByStatus}
                       cx="50%"
                       cy="50%"
                       innerRadius={60}
@@ -154,7 +145,7 @@ export default function Analytics() {
                       dataKey="count"
                       nameKey="status"
                     >
-                      {analytics.clientsByStatus.map((entry, index) => (
+                      {clientsByStatus.map((_entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
@@ -172,14 +163,14 @@ export default function Analytics() {
           {/* Year-wise Filings */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Year-wise Filings</CardTitle>
+              <CardTitle className="text-lg">Client Status Breakdown</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-[250px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={filingsByYear}>
+                  <BarChart data={clientsByStatus.length > 0 ? clientsByStatus : [{ status: 'No data', count: 0 }]}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="year" className="text-xs" />
+                    <XAxis dataKey="status" className="text-xs" />
                     <YAxis className="text-xs" />
                     <Tooltip
                       contentStyle={{
@@ -198,15 +189,15 @@ export default function Analytics() {
           {/* Document Types */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Document Types</CardTitle>
+              <CardTitle className="text-lg">Admin Workload</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-[250px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={documentStats} layout="vertical">
+                  <BarChart data={adminWorkload.length > 0 ? adminWorkload : [{ name: 'No data', clients: 0 }]} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis type="number" className="text-xs" />
-                    <YAxis dataKey="type" type="category" className="text-xs" width={80} />
+                    <YAxis dataKey="name" type="category" className="text-xs" width={80} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: 'hsl(var(--card))',
@@ -214,7 +205,7 @@ export default function Analytics() {
                         borderRadius: '8px',
                       }}
                     />
-                    <Bar dataKey="count" fill="hsl(213, 93%, 67%)" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="clients" fill="hsl(213, 93%, 67%)" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -230,7 +221,7 @@ export default function Analytics() {
           <CardContent>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={adminPerformance}>
+                <BarChart data={adminWorkload}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="name" className="text-xs" />
                   <YAxis className="text-xs" />
@@ -242,8 +233,7 @@ export default function Analytics() {
                     }}
                   />
                   <Legend />
-                  <Bar dataKey="completed" stackId="a" fill="hsl(120, 40%, 50%)" name="Completed" />
-                  <Bar dataKey="pending" stackId="a" fill="hsl(40, 90%, 50%)" name="Pending" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="clients" fill="hsl(200, 98%, 39%)" name="Clients" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

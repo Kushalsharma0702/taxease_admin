@@ -19,6 +19,7 @@ import Payments from "./pages/Payments";
 import Analytics from "./pages/Analytics";
 import Admins from "./pages/Admins";
 import AuditLogs from "./pages/AuditLogs";
+import Communication from "./pages/Communication";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -99,6 +100,14 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <AuditLogs />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/communication" 
+                  element={
+                    <ProtectedRoute>
+                      <Communication />
                     </ProtectedRoute>
                   } 
                 />

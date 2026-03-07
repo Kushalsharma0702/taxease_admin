@@ -1,11 +1,11 @@
 """
-Client routes
+Client routes — reads from production users + filings tables.
 """
 from typing import Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, text, and_, or_, update
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
@@ -20,6 +20,58 @@ from app.schemas.client import (
 
 router = APIRouter()
 
+# ---------------------------------------------------------------------------
+# Helper — build a ClientResponse dict from a production users+filings row
+# ---------------------------------------------------------------------------
+
+def _row_to_client(row) -> dict:
+    paid = float(row.paid_amount or 0)
+    total = float(row.total_amount or 0)
+    if paid <= 0:
+        pay_status = "pending"
+    elif paid >= total and total > 0:
+        pay_status = "paid"
+    else:
+        pay_status = "partial"
+
+    return {
+        "id": row.id,
+        "name": row.name,
+        "email": row.email,
+        "phone": row.phone,
+        "filing_year": row.filing_year,
+        "status": row.status or "documents_pending",
+        "payment_status": pay_status,
+        "assigned_admin_id": None,
+        "assigned_admin_name": None,
+        "total_amount": total,
+        "paid_amount": paid,
+        "created_at": row.created_at,
+        "updated_at": row.updated_at,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Base SQL — joins users LEFT JOIN filings so every user appears
+# ---------------------------------------------------------------------------
+_BASE_SQL = """
+    SELECT
+        COALESCE(f.id,  u.id)                        AS id,
+        u.first_name || ' ' || u.last_name           AS name,
+        u.email,
+        u.phone,
+        COALESCE(f.filing_year, EXTRACT(YEAR FROM NOW())::int) AS filing_year,
+        COALESCE(f.status, 'documents_pending')      AS status,
+        COALESCE(f.total_fee, 0)                     AS total_amount,
+        COALESCE((
+            SELECT SUM(p.amount) FROM payments p WHERE p.filing_id = f.id
+        ), 0)                                        AS paid_amount,
+        COALESCE(f.created_at, u.created_at)         AS created_at,
+        COALESCE(f.updated_at, u.updated_at)         AS updated_at
+    FROM users u
+    LEFT JOIN filings f ON f.user_id = u.id
+"""
+
 
 @router.get("", response_model=ClientListResponse)
 async def get_clients(
@@ -28,61 +80,53 @@ async def get_clients(
     status_filter: Optional[str] = Query(None, alias="status"),
     year_filter: Optional[int] = Query(None, alias="year"),
     search: Optional[str] = None,
-    email: Optional[str] = Query(None),  # Direct email search for sync
+    email: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_admin = Depends(get_current_admin)
 ):
-    """Get all clients with pagination and filters"""
-    query = select(Client).options(selectinload(Client.assigned_admin))
-    
-    # Apply filters
-    conditions = []
+    """Get all clients — reads from production users + filings tables."""
+    where_clauses = []
+    params: dict = {}
+
     if status_filter:
-        conditions.append(Client.status == status_filter)
+        where_clauses.append("COALESCE(f.status, 'documents_pending') = :status_filter")
+        params["status_filter"] = status_filter
     if year_filter:
-        conditions.append(Client.filing_year == year_filter)
+        where_clauses.append("COALESCE(f.filing_year, EXTRACT(YEAR FROM NOW())::int) = :year_filter")
+        params["year_filter"] = year_filter
     if email:
-        # Exact email match for sync service
-        conditions.append(Client.email == email)
+        where_clauses.append("u.email = :email")
+        params["email"] = email
     elif search:
-        conditions.append(
-            or_(
-                Client.name.ilike(f"%{search}%"),
-                Client.email.ilike(f"%{search}%")
-            )
+        where_clauses.append(
+            "(u.first_name || ' ' || u.last_name ILIKE :search OR u.email ILIKE :search)"
         )
-    
-    if conditions:
-        query = query.where(and_(*conditions))
-    
-    # Count total
-    count_query = select(func.count()).select_from(Client)
-    if conditions:
-        count_query = count_query.where(and_(*conditions))
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
-    
-    # Apply pagination
-    query = query.order_by(Client.created_at.desc())
-    query = query.offset((page - 1) * page_size).limit(page_size)
-    
-    result = await db.execute(query)
-    clients = result.scalars().all()
-    
-    # Format response
-    client_responses = []
-    for client in clients:
-        client_dict = ClientResponse.model_validate(client).model_dump()
-        if client.assigned_admin:
-            client_dict["assigned_admin_name"] = client.assigned_admin.name
-        client_responses.append(ClientResponse(**client_dict))
-    
+        params["search"] = f"%{search}%"
+
+    where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+    # Total count
+    count_sql = f"SELECT COUNT(*) FROM users u LEFT JOIN filings f ON f.user_id = u.id {where_sql}"
+    count_result = await db.execute(text(count_sql), params)
+    total = count_result.scalar() or 0
+
+    # Paginated rows
+    offset = (page - 1) * page_size
+    data_sql = f"""
+        {_BASE_SQL}
+        {where_sql}
+        ORDER BY created_at DESC
+        LIMIT :limit OFFSET :offset
+    """
+    params["limit"] = page_size
+    params["offset"] = offset
+    result = await db.execute(text(data_sql), params)
+    rows = result.fetchall()
+
+    clients = [ClientResponse(**_row_to_client(r)) for r in rows]
     pagination = calculate_pagination(page, page_size, total)
-    
-    return ClientListResponse(
-        clients=client_responses,
-        **pagination
-    )
+
+    return ClientListResponse(clients=clients, **pagination)
 
 
 @router.get("/{client_id}", response_model=ClientResponse)
@@ -91,19 +135,19 @@ async def get_client(
     db: AsyncSession = Depends(get_db),
     current_admin = Depends(get_current_admin)
 ):
-    """Get a specific client"""
-    query = select(Client).options(selectinload(Client.assigned_admin)).where(Client.id == client_id)
-    result = await db.execute(query)
-    client = result.scalar_one_or_none()
-    
-    if not client:
+    """Get a specific client by filing ID or user ID."""
+    sql = f"""
+        {_BASE_SQL}
+        WHERE f.id = :id OR u.id = :id
+        LIMIT 1
+    """
+    result = await db.execute(text(sql), {"id": str(client_id)})
+    row = result.fetchone()
+
+    if not row:
         raise HTTPException(status_code=404, detail="Client not found")
-    
-    client_dict = ClientResponse.model_validate(client).model_dump()
-    if client.assigned_admin:
-        client_dict["assigned_admin_name"] = client.assigned_admin.name
-    
-    return ClientResponse(**client_dict)
+
+    return ClientResponse(**_row_to_client(row))
 
 
 @router.post("", response_model=ClientResponse, status_code=status.HTTP_201_CREATED)
@@ -143,34 +187,34 @@ async def update_client(
     db: AsyncSession = Depends(get_db),
     current_admin = Depends(require_permission(PERMISSIONS["ADD_EDIT_CLIENT"]))
 ):
-    """Update a client"""
-    query = select(Client).where(Client.id == client_id)
-    result = await db.execute(query)
-    client = result.scalar_one_or_none()
-    
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    
-    old_values = {k: str(v) for k, v in client_data.model_dump(exclude_unset=True).items()}
-    new_values = {}
-    
-    for key, value in client_data.model_dump(exclude_unset=True).items():
-        if hasattr(client, key):
-            old_values[key] = str(getattr(client, key))
-            setattr(client, key, value)
-            new_values[key] = str(value)
-    
-    await db.commit()
-    await db.refresh(client)
-    
-    # Create audit log
+    """Update a client — writes to filings table (production schema)."""
+    updates = client_data.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    # Map client fields to filings table columns
+    filing_updates = {}
+    if "status" in updates:
+        filing_updates["status"] = updates["status"]
+    if "total_amount" in updates:
+        filing_updates["total_fee"] = updates["total_amount"]
+
+    if filing_updates:
+        set_clause = ", ".join(f"{k} = :{k}" for k in filing_updates)
+        filing_updates["fid"] = str(client_id)
+        await db.execute(
+            text(f"UPDATE filings SET {set_clause}, updated_at = NOW() WHERE id = :fid"),
+            filing_updates
+        )
+        await db.commit()
+
+    # Audit log
     await create_audit_log(
-        db, "Client Updated", "client", str(client.id), current_admin.id,
-        old_value=str(old_values) if old_values else None,
-        new_value=str(new_values) if new_values else None
+        db, "Client Updated", "client", str(client_id), current_admin.id,
+        new_value=str(updates)
     )
-    
-    return ClientResponse.model_validate(client)
+
+    return await get_client(client_id, db, current_admin)
 
 
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)

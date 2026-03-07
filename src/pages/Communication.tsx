@@ -75,38 +75,21 @@ export default function Communication() {
   const loadAllMessages = async (showLoading = true) => {
     try {
       if (showLoading) setIsLoading(true);
-      // Fetch all clients
-      const clients = await apiService.getClients();
-      
-      // Fetch messages for each client
+      // Fetch filings as the "client" list (mapped — filings are the closest concept in backend)
+      const response = await apiService.getClients();
+      const filings = (response as any).filings || (response as any).clients || (Array.isArray(response) ? response : []);
+
+      // Chat endpoint is not available — return empty message lists
       const clientsData: ClientWithMessages[] = await Promise.all(
-        clients.map(async (client: any) => {
-          try {
-            const messagesData = await apiService.getChatMessages(client.id);
-            const unreadData = await apiService.getUnreadCount(client.id, 'admin');
-            
-            const messages = messagesData.messages || [];
-            const lastMessage = messages[messages.length - 1];
-            
-            return {
-              clientId: client.id,
-              clientName: client.name,
-              clientEmail: client.email,
-              messages: messages,
-              unreadCount: unreadData.unread_count || 0,
-              lastMessageTime: lastMessage?.created_at || '',
-            };
-          } catch (error) {
-            console.error(`Error loading messages for client ${client.id}:`, error);
-            return {
-              clientId: client.id,
-              clientName: client.name,
-              clientEmail: client.email,
-              messages: [],
-              unreadCount: 0,
-              lastMessageTime: '',
-            };
-          }
+        filings.map(async (client: any) => {
+          return {
+            clientId: client.id,
+            clientName: client.name || `Filing ${client.filing_year}`,
+            clientEmail: client.email || client.user_id || '—',
+            messages: [],
+            unreadCount: 0,
+            lastMessageTime: '',
+          };
         })
       );
 
@@ -233,6 +216,11 @@ export default function Communication() {
       title="Communication"
       breadcrumbs={[{ label: 'Communication' }]}
     >
+      <div className="space-y-4">
+      <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+        <strong>Note:</strong> The chat (<code>/chat</code>) endpoint is not yet available in the current backend API. Message sending is disabled. Filing records are shown for reference.
+      </div>
+      </div>
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Clients List */}
         <Card className="lg:col-span-1">

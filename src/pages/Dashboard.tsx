@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAnalyticsData, mockClients } from '@/data/mockData';
-import { Users, FileText, CreditCard, CheckCircle, DollarSign, UserCog } from 'lucide-react';
+import { apiService } from '@/services/api';
+import { Users, FileText, CreditCard, CheckCircle, DollarSign, UserCog, Loader2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
@@ -16,9 +16,36 @@ const COLORS = ['hsl(200, 98%, 39%)', 'hsl(213, 93%, 67%)', 'hsl(215, 20%, 65%)'
 
 export default function Dashboard() {
   const { user, isSuperAdmin } = useAuth();
-  const analytics = getAnalyticsData();
   const navigate = useNavigate();
   const { setSteps, startTour, hasCompletedTour, steps } = useTour();
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [recentClients, setRecentClients] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchDashboardData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [analyticsData, clientsData] = await Promise.all([
+        apiService.getAnalytics(),
+        apiService.getClients({ page_size: 5 }),
+      ]);
+      setAnalytics(analyticsData);
+      // filings response: { filings, total } — each filing has id, user_id, status, filing_year
+      const filingsList = clientsData?.filings || clientsData?.clients || [];
+      setRecentClients(filingsList.map((c: any) => ({
+        id: c.id,
+        name: c.name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || `Filing ${c.filing_year || ''}`.trim(),
+        email: c.email || c.user_id || '—',
+        status: c.status || 'active',
+      })));
+    } catch (error) {
+      console.error('Failed to fetch dashboard data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
 
   // Initialize tour steps when component mounts
   useEffect(() => {
@@ -36,7 +63,13 @@ export default function Dashboard() {
     }
   }, [hasCompletedTour, steps.length, startTour]);
 
-  const recentClients = mockClients.slice(0, 5);
+  if (isLoading) {
+    return (
+      <DashboardLayout title="Dashboard" breadcrumbs={[{ label: 'Dashboard' }]}>
+        <div className="flex justify-center items-center py-24"><Loader2 className="h-10 w-10 animate-spin text-muted-foreground" /></div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout
@@ -48,23 +81,23 @@ export default function Dashboard() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="Total Clients"
-            value={analytics.totalClients}
+            value={analytics?.total_clients ?? 0}
             icon={Users}
             trend={{ value: 12, isPositive: true }}
           />
           <StatCard
             title="Pending Documents"
-            value={analytics.pendingDocuments}
+            value={analytics?.pending_documents ?? 0}
             icon={FileText}
           />
           <StatCard
             title="Pending Payments"
-            value={analytics.pendingPayments}
+            value={analytics?.pending_payments ?? 0}
             icon={CreditCard}
           />
           <StatCard
             title="Completed Filings"
-            value={analytics.completedFilings}
+            value={analytics?.completed_filings ?? 0}
             icon={CheckCircle}
           />
         </div>
@@ -73,13 +106,13 @@ export default function Dashboard() {
           <div className="grid gap-4 md:grid-cols-2">
             <StatCard
               title="Total Revenue"
-              value={`$${analytics.totalRevenue.toLocaleString()}`}
+              value={`$${(analytics?.total_revenue ?? 0).toLocaleString()}`}
               icon={DollarSign}
               trend={{ value: 8, isPositive: true }}
             />
             <StatCard
               title="Total Admins"
-              value={analytics.totalAdmins}
+              value={analytics?.total_admins ?? 0}
               icon={UserCog}
             />
           </div>
@@ -95,7 +128,7 @@ export default function Dashboard() {
             <CardContent>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analytics.monthlyRevenue}>
+                  <BarChart data={analytics?.monthly_revenue || []}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="month" className="text-xs" />
                     <YAxis className="text-xs" />
@@ -123,7 +156,7 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={analytics.clientsByStatus}
+                      data={analytics?.clients_by_status || []}
                       cx="50%"
                       cy="50%"
                       innerRadius={60}
@@ -134,7 +167,7 @@ export default function Dashboard() {
                       label={({ status, count }) => `${status}: ${count}`}
                       labelLine={false}
                     >
-                      {analytics.clientsByStatus.map((entry, index) => (
+                      {(analytics?.clients_by_status || []).map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
@@ -156,7 +189,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {analytics.adminWorkload.map((admin, i) => (
+                  {(analytics?.admin_workload || []).map((admin: any, i: number) => (
                     <div key={i} className="flex items-center justify-between">
                       <span className="text-sm font-medium">{admin.name}</span>
                       <div className="flex items-center gap-3">

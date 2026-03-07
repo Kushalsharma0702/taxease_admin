@@ -8,13 +8,11 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
-    // Proxy API calls to backend to avoid CORS issues in development
     proxy: {
       '/api': {
-        target: 'http://localhost:8001',
+        target: 'http://localhost:8003',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path, // Keep the path as-is
       },
     },
   },

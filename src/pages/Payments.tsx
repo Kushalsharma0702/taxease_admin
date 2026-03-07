@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,18 +21,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { mockPayments, mockClients } from '@/data/mockData';
 import { Payment, PERMISSIONS } from '@/types';
-import { CreditCard, Plus, DollarSign, TrendingUp, Download } from 'lucide-react';
+import { CreditCard, Plus, DollarSign, TrendingUp, Download, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { apiService } from '@/services/api';
 
 export default function Payments() {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
-  const [payments, setPayments] = useState(mockPayments);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [clients, setClients] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [avgPayment, setAvgPayment] = useState(0);
   const [newPayment, setNewPayment] = useState({
     clientId: '',
     amount: '',
@@ -40,22 +45,52 @@ export default function Payments() {
     note: '',
   });
 
-  const paymentsWithClient = payments.map((payment) => {
-    const client = mockClients.find((c) => c.id === payment.clientId);
-    return { ...payment, clientName: client?.name || 'Unknown' };
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      // /payments is not available — data comes from filings (paid_amount, payment_status)
+      const [paymentsRes, filingsRes] = await Promise.all([
+        apiService.getPayments(),
+        apiService.getFilings({ page_size: 100 }),
+      ]);
+      const paymentsList = Array.isArray(paymentsRes) ? paymentsRes : (paymentsRes as any)?.payments || [];
+      setPayments(paymentsList);
+      const total = paymentsList.reduce((s: number, p: any) => s + (p.amount || 0), 0);
+      setTotalRevenue(total);
+      setAvgPayment(paymentsList.length > 0 ? total / paymentsList.length : 0);
+      // Use filings as the client selector list
+      const filings = filingsRes?.filings || [];
+      setClients(filings.map((f: any) => ({
+        id: f.id,
+        name: f.name || `Filing ${f.filing_year} (${f.id.slice(0, 8)})`,
+      })));
+    } catch (error) {
+      console.error('Failed to fetch payment data:', error);
+      toast({ title: 'Error', description: 'Failed to load payment data.', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const paymentsWithClient = payments.map((payment: any) => {
+    const client = clients.find((c: any) => c.id === payment.client_id);
+    return {
+      ...payment,
+      clientName: client?.name || payment.client_name || `Filing ${payment.filing_year || ''}`,
+      createdAt: new Date(payment.created_at || Date.now()),
+    };
   });
 
-  const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
-  const avgPayment = payments.length > 0 ? totalRevenue / payments.length : 0;
-
-  const monthlyData = [
-    { month: 'Jan', amount: 2400 },
-    { month: 'Feb', amount: 1800 },
-    { month: 'Mar', amount: 3200 },
-    { month: 'Apr', amount: 2800 },
-    { month: 'May', amount: 1900 },
-    { month: 'Jun', amount: 2100 },
-  ];
+  const monthlyData = payments.reduce((acc: any[], p: any) => {
+    const date = new Date(p.created_at || Date.now());
+    const month = date.toLocaleString('default', { month: 'short' });
+    const existing = acc.find(a => a.month === month);
+    if (existing) { existing.amount += p.amount || 0; } 
+    else { acc.push({ month, amount: p.amount || 0 }); }
+    return acc;
+  }, []);
 
   const columns = [
     {
@@ -87,7 +122,7 @@ export default function Payments() {
     },
   ];
 
-  const handleAddPayment = () => {
+  const handleAddPayment = async () => {
     if (!newPayment.clientId || !newPayment.amount) {
       toast({
         title: 'Validation Error',
@@ -97,23 +132,28 @@ export default function Payments() {
       return;
     }
 
-    const payment: Payment = {
-      id: String(payments.length + 1),
-      clientId: newPayment.clientId,
-      amount: parseFloat(newPayment.amount),
-      method: newPayment.method === 'etransfer' ? 'E-Transfer' : newPayment.method === 'credit' ? 'Credit Card' : 'Debit',
-      note: newPayment.note,
-      createdAt: new Date(),
-      createdBy: 'Current User',
-    };
-
-    setPayments([payment, ...payments]);
-    setNewPayment({ clientId: '', amount: '', method: 'etransfer', note: '' });
-    setIsAddOpen(false);
-    toast({
-      title: 'Payment Added',
-      description: `Payment of $${payment.amount} has been recorded.`,
-    });
+    setIsSaving(true);
+    try {
+      await apiService.createPayment({
+        client_id: newPayment.clientId,
+        amount: parseFloat(newPayment.amount),
+        method: newPayment.method === 'etransfer' ? 'E-Transfer' : newPayment.method === 'credit' ? 'Credit Card' : 'Debit',
+        note: newPayment.note,
+      });
+      setNewPayment({ clientId: '', amount: '', method: 'etransfer', note: '' });
+      setIsAddOpen(false);
+      toast({
+        title: 'Note',
+        description: 'Payment recording is not yet available in the backend API. Data shown is derived from filing records.',
+        variant: 'destructive',
+      });
+      fetchData();
+    } catch (error) {
+      console.error('Failed to add payment:', error);
+      toast({ title: 'Error', description: 'Failed to record payment.', variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -225,7 +265,7 @@ export default function Payments() {
                           <SelectValue placeholder="Select client" />
                         </SelectTrigger>
                         <SelectContent>
-                          {mockClients.map((client) => (
+                          {clients.map((client: any) => (
                             <SelectItem key={client.id} value={client.id}>
                               {client.name}
                             </SelectItem>
@@ -271,7 +311,10 @@ export default function Payments() {
                     <Button variant="outline" onClick={() => setIsAddOpen(false)}>
                       Cancel
                     </Button>
-                    <Button onClick={handleAddPayment}>Record Payment</Button>
+                    <Button onClick={handleAddPayment} disabled={isSaving}>
+                      {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      Record Payment
+                    </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>

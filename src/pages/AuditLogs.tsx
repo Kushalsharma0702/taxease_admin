@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,15 +11,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { mockAuditLogs } from '@/data/mockData';
-import { Search, Download, Filter, Clock, User, ArrowRight } from 'lucide-react';
+import { Search, Download, Filter, Clock, User, ArrowRight, Loader2 } from 'lucide-react';
+import { apiService } from '@/services/api';
 
 export default function AuditLogs() {
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState('all');
+  const [logs, setLogs] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [totalLogs, setTotalLogs] = useState(0);
 
-  const filteredLogs = mockAuditLogs.filter((log) => {
-    if (actionFilter !== 'all' && !log.action.toLowerCase().includes(actionFilter)) return false;
+  const fetchLogs = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const params: any = {};
+      if (actionFilter !== 'all') params.action = actionFilter;
+      const data = await apiService.getAuditLogs(params);
+      const logsList = data?.logs || [];
+      setLogs(logsList.map((l: any) => ({
+        ...l,
+        performedByName: l.performed_by_name || 'Unknown',
+        performedBy: l.performed_by_id,
+        entityType: l.entity_type,
+        oldValue: l.old_value,
+        newValue: l.new_value,
+        timestamp: new Date(l.timestamp),
+      })));
+      setTotalLogs(data?.total || logsList.length);
+    } catch (error) {
+      console.error('Failed to fetch audit logs:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [actionFilter]);
+
+  useEffect(() => { fetchLogs(); }, [fetchLogs]);
+
+  const filteredLogs = logs.filter((log) => {
     if (search && !log.action.toLowerCase().includes(search.toLowerCase()) &&
         !log.performedByName.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
@@ -39,6 +67,10 @@ export default function AuditLogs() {
       breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Audit Logs' }]}
     >
       <div className="space-y-6">
+        {/* Backend notice */}
+        <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+          <strong>Note:</strong> The <code>/audit-logs</code> endpoint is not yet available in the current backend API. Logs will appear here once the backend implements this feature.
+        </div>
         {/* Header */}
         <div className="flex flex-col sm:flex-row gap-4 justify-between">
           <div className="flex gap-3">
@@ -75,14 +107,14 @@ export default function AuditLogs() {
           <Card>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">Total Logs</p>
-              <p className="text-2xl font-bold">{mockAuditLogs.length}</p>
+              <p className="text-2xl font-bold">{totalLogs}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">Today</p>
               <p className="text-2xl font-bold">
-                {mockAuditLogs.filter((l) => 
+                {logs.filter((l) => 
                   l.timestamp.toDateString() === new Date().toDateString()
                 ).length}
               </p>
@@ -91,14 +123,17 @@ export default function AuditLogs() {
           <Card>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">This Week</p>
-              <p className="text-2xl font-bold">{mockAuditLogs.length}</p>
+              <p className="text-2xl font-bold">{logs.filter((l) => {
+                const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+                return l.timestamp >= weekAgo;
+              }).length}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">Unique Users</p>
               <p className="text-2xl font-bold">
-                {new Set(mockAuditLogs.map((l) => l.performedBy)).size}
+                {new Set(logs.map((l) => l.performedBy)).size}
               </p>
             </CardContent>
           </Card>
@@ -111,7 +146,9 @@ export default function AuditLogs() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {filteredLogs.length === 0 ? (
+              {isLoading ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+              ) : filteredLogs.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">No logs found.</p>
               ) : (
                 filteredLogs.map((log) => (

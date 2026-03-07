@@ -22,7 +22,7 @@ const getBaseUrl = (): string => {
     return import.meta.env.VITE_PRODUCTION_API_URL || 'https://api.taxhub.com/api/v1';
   }
   
-  return 'http://localhost:8001/api/v1';
+  return '/api/v1';
 };
 
 export const API_CONFIG = {

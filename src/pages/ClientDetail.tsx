@@ -83,50 +83,93 @@ export default function ClientDetail() {
   const [userFilings, setUserFilings] = useState<any[]>([]);
   const [t1FormData, setT1FormData] = useState<any>(null);
   const [isLoadingClient, setIsLoadingClient] = useState(true);
-  const [documents, setDocuments] = useState(() => mockDocuments.filter((d) => d.clientId === id));
-  const [payments, setPayments] = useState(() => mockPayments.filter((p) => p.clientId === id));
-  const [notes, setNotes] = useState<Note[]>(() => mockNotes.filter((n) => n.clientId === id));
-  const questionnaire = useMemo(() => mockQuestionnaires.find((q) => q.clientId === id), [id]);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [questionnaire, setQuestionnaire] = useState<any>(null);
 
-  // Fetch user and their filings
+  // Fetch filing details, T1 form data (with answers), documents, and payments
   useEffect(() => {
     const fetchUserData = async () => {
       if (!id) return;
-      
       setIsLoadingClient(true);
       try {
-        // Fetch user's basic info, filings, and T1 form data in parallel
-        const [userInfo, filingsData, t1Data] = await Promise.all([
-          api.getUser(id),
-          api.getUserFilings(id),
-          api.getUserT1FormData(id)
+        // 1. Fetch client/filing data + T1 form list in parallel
+        const [filingData, t1Forms, docsResp, paymentsResp] = await Promise.all([
+          api.getFiling(id),
+          api.getT1PersonalForms().catch(() => []),
+          api.getDocuments({ client_id: id }).catch(() => ({ documents: [], total: 0 })),
+          api.getPayments({ client_id: id }).catch(() => []),
         ]);
-        
-        setUserFilings(filingsData.filings || []);
-        setT1FormData(t1Data?.t1_form || null);
-        
-        // Create a client object from the user data
+
+        // 2. Find matching T1 form for this filing
+        const matchedT1Summary = Array.isArray(t1Forms)
+          ? t1Forms.find((f: any) => f.filing_id === id || f.id === id)
+          : null;
+
+        // 3. If found, fetch full T1 form detail with answers
+        let fullT1Form = null;
+        if (matchedT1Summary?.id) {
+          try {
+            fullT1Form = await api.getT1Form(matchedT1Summary.id);
+          } catch {
+            fullT1Form = matchedT1Summary; // fallback to summary if detail fails
+          }
+        }
+
+        setUserFilings(filingData ? [filingData] : []);
+        setT1FormData(fullT1Form || null);
+
+        // 4. Build questionnaire from T1 answers if available
+        if (fullT1Form?.answers?.length) {
+          const questions = fullT1Form.answers.map((a: any, i: number) => {
+            const rawValue = a.value ?? a.value_text ?? (a.value_numeric != null ? String(a.value_numeric) : null) ?? (a.value_boolean != null ? String(a.value_boolean) : null) ?? '';
+            const category = a.field_key?.split('.')?.[0]?.replace(/_/g, ' ')?.replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'General';
+            return {
+              id: a.id || `q-${i}`,
+              question: a.field_key?.replace(/_/g, ' ')?.replace(/\b\w/g, (c: string) => c.toUpperCase()) || `Field ${i + 1}`,
+              answer: rawValue,
+              category,
+              section: category,
+              type: 'text',
+            };
+          });
+          setQuestionnaire({
+            clientId: id,
+            completedAt: fullT1Form.submitted_at,
+            questions,
+            status: fullT1Form.status,
+            completion_percentage: fullT1Form.completion_percentage,
+          });
+        }
+
+        // 5. Set documents and payments from real API
+        setDocuments((docsResp as any)?.documents || []);
+        setPayments(Array.isArray(paymentsResp) ? paymentsResp : []);
+
         const clientData = {
           id: id,
-          name: userInfo?.name || 'Unknown User',
-          email: userInfo?.email || '',
-          phone: userInfo?.phone || '',
-          filingYear: new Date().getFullYear(),
-          status: (filingsData.total_filings > 0 ? 'under_review' : 'documents_pending') as ClientStatus,
-          paymentStatus: 'pending',
-          totalAmount: 0,
-          paidAmount: 0,
-          createdAt: userInfo?.created_at ? new Date(userInfo.created_at) : new Date(),
-          updatedAt: new Date(),
-          filingCount: filingsData.total_filings || 0,
+          name: filingData?.name || `${filingData?.first_name || ''} ${filingData?.last_name || ''}`.trim() || `Filing ${filingData?.filing_year || ''}`,
+          email: filingData?.email || '—',
+          phone: filingData?.phone || '',
+          filingYear: filingData?.filing_year || new Date().getFullYear(),
+          status: (filingData?.status || 'documents_pending') as ClientStatus,
+          paymentStatus: filingData?.payment_status || 'pending',
+          totalAmount: filingData?.total_fee || filingData?.total_amount || 0,
+          paidAmount: filingData?.paid_amount || 0,
+          assignedAdminId: filingData?.assigned_admin?.id || null,
+          assignedAdminName: filingData?.assigned_admin?.name || null,
+          createdAt: filingData?.created_at ? new Date(filingData.created_at) : new Date(),
+          updatedAt: filingData?.updated_at ? new Date(filingData.updated_at) : new Date(),
+          filingCount: 1,
         };
-        
+
         setClient(clientData);
       } catch (error: any) {
-        console.error('Failed to fetch user data:', error);
+        console.error('Failed to fetch filing details:', error);
         toast({
           title: 'Error',
-          description: 'Failed to load client details',
+          description: 'Failed to load filing details.',
           variant: 'destructive',
         });
       } finally {
@@ -700,7 +743,7 @@ export default function ClientDetail() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {userFilings.map((filing) => (
-                    <div key={filing.filing_id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div key={filing.id || filing.filing_id || filing.filing_year} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
                       <div className="flex items-center justify-between mb-3">
                         <div>
                           <h4 className="font-semibold">Filing Year: {filing.filing_year}</h4>

@@ -54,49 +54,50 @@ export default function Clients() {
   const [newClient, setNewClient] = useState({ name: '', email: '', phone: '' });
   const [editClient, setEditClient] = useState({ name: '', email: '', phone: '' });
 
-  // Fetch clients from API (now using users endpoint for real data)
+  // Fetch filings from backend (/filings endpoint, mapped as "clients")
   const fetchClients = useCallback(async () => {
     setIsFetching(true);
     try {
-      const params: { search?: string; has_filings?: boolean } = {};
-      if (statusFilter === 'with_filings') params.has_filings = true;
-      if (statusFilter === 'without_filings') params.has_filings = false;
-      
-      const response = await api.getUsers(params);
-      
-      // Map API response to Client type  
-      const mappedClients: Client[] = (response.users || []).map((u: any) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        phone: u.phone || '',
-        filingYear: new Date().getFullYear(), // Current year as default
-        status: u.filing_count > 0 ? 'under_review' : 'documents_pending' as ClientStatus,
-        paymentStatus: 'pending',
-        totalAmount: 0,
-        paidAmount: 0,
-        assignedAdminId: null,
-        assignedAdminName: null,
-        createdAt: new Date(u.created_at),
-        updatedAt: new Date(u.created_at),
-        // Add filing data
-        filingCount: u.filing_count,
-        t1FormCount: u.t1_form_count,
-        latestFiling: u.latest_filing ? new Date(u.latest_filing) : null,
+      const params: { status?: string; year?: number } = {};
+      if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
+      if (yearFilter && yearFilter !== 'all') params.year = parseInt(yearFilter);
+
+      const response = await api.getClients(params);
+
+      // Backend returns FilingResponse objects — map them to Client shape
+      // FilingResponse: { id, user_id, filing_year, status, total_fee, paid_amount, payment_status, assigned_admin, created_at, updated_at }
+      const filings = response.filings || response.clients || response.users || [];
+      const mappedClients: Client[] = filings.map((f: any) => ({
+        id: f.id,
+        name: f.name || `${f.first_name || ''} ${f.last_name || ''}`.trim() || `Filing ${f.filing_year}`,
+        email: f.email || f.user_id || '—',
+        phone: f.phone || '',
+        filingYear: f.filing_year || new Date().getFullYear(),
+        status: (f.status || 'documents_pending') as ClientStatus,
+        paymentStatus: f.payment_status || 'pending',
+        totalAmount: f.total_fee || f.total_amount || 0,
+        paidAmount: f.paid_amount || 0,
+        assignedAdminId: f.assigned_admin?.id || f.assigned_admin_id || null,
+        assignedAdminName: f.assigned_admin?.name || f.assigned_admin_name || null,
+        createdAt: new Date(f.created_at),
+        updatedAt: new Date(f.updated_at || f.created_at),
+        filingCount: 1,
+        t1FormCount: 0,
+        latestFiling: new Date(f.created_at),
       }));
-      
+
       setClients(mappedClients);
     } catch (error: any) {
-      console.error('Failed to fetch clients:', error);
+      console.error('Failed to fetch filings:', error);
       toast({
         title: 'Error',
-        description: error.message || 'Failed to fetch clients from server',
+        description: error.message || 'Failed to fetch records from server',
         variant: 'destructive',
       });
     } finally {
       setIsFetching(false);
     }
-  }, [statusFilter, toast]);
+  }, [statusFilter, yearFilter, toast]);
 
   // Fetch on mount and when filters change
   useEffect(() => {
@@ -207,36 +208,21 @@ export default function Clients() {
   ];
 
   const handleAddClient = async () => {
-    if (!newClient.name || !newClient.email) {
-      toast({
-        title: 'Validation Error',
-        description: 'Please fill in all required fields.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     setIsLoading(true);
     try {
-      await api.createClient({
-        name: newClient.name,
-        email: newClient.email,
-        phone: newClient.phone,
-        filing_year: new Date().getFullYear(),
-      });
-
+      // Backend creates a filing record — name/email/phone are not stored server-side yet
+      await api.createFiling({ filing_year: new Date().getFullYear() });
       setNewClient({ name: '', email: '', phone: '' });
       setIsAddOpen(false);
       toast({
-        title: 'Client Added',
-        description: `${newClient.name} has been added successfully.`,
+        title: 'Filing Created',
+        description: 'A new filing record has been created for the current tax year.',
       });
-      // Refresh the list
       fetchClients();
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to add client',
+        description: error.message || 'Failed to create filing record',
         variant: 'destructive',
       });
     } finally {
@@ -245,35 +231,25 @@ export default function Clients() {
   };
 
   const handleEditClient = async () => {
-    if (!selectedClient || !editClient.name || !editClient.email) {
-      toast({
-        title: 'Validation Error',
-        description: 'Please fill in all required fields.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
+    if (!selectedClient) return;
     setIsLoading(true);
     try {
+      // Status/payment_status updates are supported via the filing
       await api.updateClient(selectedClient.id, {
-        name: editClient.name,
-        email: editClient.email,
-        phone: editClient.phone,
+        status: selectedClient.status,
+        payment_status: selectedClient.paymentStatus,
       });
-    
       setIsEditOpen(false);
       setSelectedClient(null);
       toast({
-        title: 'Client Updated',
-        description: `${editClient.name}'s information has been updated.`,
+        title: 'Record Updated',
+        description: 'Filing record has been updated.',
       });
-      // Refresh the list
       fetchClients();
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update client',
+        description: error.message || 'Failed to update record',
         variant: 'destructive',
       });
     } finally {
@@ -283,24 +259,18 @@ export default function Clients() {
 
   const handleDeleteClient = async () => {
     if (!selectedClient) return;
-
     setIsLoading(true);
     try {
       await api.deleteClient(selectedClient.id);
       setIsDeleteOpen(false);
       toast({
-        title: 'Client Deleted',
-        description: `${selectedClient.name} has been removed from the system.`,
-      });
-      setSelectedClient(null);
-      // Refresh the list
-      fetchClients();
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete client',
+        title: 'Not Supported',
+        description: 'Delete filing is not available in the current backend.',
         variant: 'destructive',
       });
+      setSelectedClient(null);
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Failed to delete', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }

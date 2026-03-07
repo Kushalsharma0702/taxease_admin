@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,10 +27,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { mockAdmins, mockClients } from '@/data/mockData';
 import { User, PERMISSIONS } from '@/types';
 import { UserPlus, Edit, Shield, Users, Trash2, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { apiService } from '@/services/api';
 
 const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSIONS.ADD_EDIT_PAYMENT]: 'Add/Edit Payments',
@@ -44,21 +44,46 @@ const PERMISSION_LABELS: Record<string, string> = {
 
 export default function Admins() {
   const { toast } = useToast();
-  const [admins, setAdmins] = useState(mockAdmins);
+  const [admins, setAdmins] = useState<User[]>([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<User | null>(null);
   const [adminToDelete, setAdminToDelete] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
   const [newAdmin, setNewAdmin] = useState({
     name: '',
     email: '',
+    password: 'demo123',
     permissions: [] as string[],
   });
 
+  const fetchAdmins = useCallback(async () => {
+    setIsFetching(true);
+    try {
+      const data = await apiService.getAdminUsers();
+      const mapped = (Array.isArray(data) ? data : []).map((a: any) => ({
+        id: a.id,
+        email: a.email,
+        name: a.name || [a.first_name, a.last_name].filter(Boolean).join(' ') || a.email,
+        role: (a.role || 'admin') as 'admin' | 'superadmin',
+        permissions: a.permissions || [],
+        isActive: a.is_active ?? true,
+        createdAt: new Date(a.created_at || Date.now()),
+      }));
+      setAdmins(mapped);
+    } catch (error) {
+      console.error('Failed to fetch admins:', error);
+    } finally {
+      setIsFetching(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchAdmins(); }, [fetchAdmins]);
+
   const adminsWithWorkload = admins.map((admin) => ({
     ...admin,
-    clientCount: mockClients.filter((c) => c.assignedAdminId === admin.id).length,
+    clientCount: 0,
   }));
 
   const columns = [
@@ -159,42 +184,48 @@ export default function Admins() {
     }
 
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const admin: User = {
-      id: String(Date.now()),
-      name: newAdmin.name,
-      email: newAdmin.email,
-      role: 'admin',
-      permissions: newAdmin.permissions,
-      isActive: true,
-      createdAt: new Date(),
-    };
-
-    setAdmins([...admins, admin]);
-    setNewAdmin({ name: '', email: '', permissions: [] });
-    setIsAddOpen(false);
-    setIsLoading(false);
-    toast({
-      title: 'Admin Created',
-      description: `${admin.name} has been added as an admin.`,
-    });
+    try {
+      await apiService.createAdminUser({
+        name: newAdmin.name,
+        email: newAdmin.email,
+        password: newAdmin.password || 'demo123',
+        role: 'admin',
+        permissions: newAdmin.permissions,
+      });
+      setNewAdmin({ name: '', email: '', password: 'demo123', permissions: [] });
+      setIsAddOpen(false);
+      toast({
+        title: 'Admin Created',
+        description: `${newAdmin.name} has been added as an admin.`,
+      });
+      fetchAdmins(); // Refresh
+    } catch (error) {
+      console.error('Failed to create admin:', error);
+      toast({ title: 'Error', description: 'Failed to create admin.', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDeleteAdmin = async () => {
     if (!adminToDelete) return;
 
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    setAdmins(prev => prev.filter(a => a.id !== adminToDelete.id));
-    setIsDeleteOpen(false);
-    setIsLoading(false);
-    toast({
-      title: 'Admin Deleted',
-      description: `${adminToDelete.name} has been removed from the system.`,
-    });
-    setAdminToDelete(null);
+    try {
+      await apiService.deleteAdminUser(adminToDelete.id);
+      setIsDeleteOpen(false);
+      toast({
+        title: 'Admin Deleted',
+        description: `${adminToDelete.name} has been removed from the system.`,
+      });
+      setAdminToDelete(null);
+      fetchAdmins(); // Refresh
+    } catch (error) {
+      console.error('Failed to delete admin:', error);
+      toast({ title: 'Error', description: 'Failed to delete admin.', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleTogglePermission = (permission: string) => {
@@ -220,17 +251,28 @@ export default function Admins() {
     if (!editingAdmin) return;
 
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    setAdmins((prev) =>
-      prev.map((a) => (a.id === editingAdmin.id ? editingAdmin : a))
-    );
-    setEditingAdmin(null);
-    setIsLoading(false);
-    toast({
-      title: 'Admin Updated',
-      description: 'Admin permissions have been updated successfully.',
-    });
+    try {
+      await apiService.updateAdminUser(editingAdmin.id, {
+        name: editingAdmin.name,
+        email: editingAdmin.email,
+        role: editingAdmin.role,
+        permissions: editingAdmin.permissions,
+        is_active: editingAdmin.isActive,
+      });
+      setAdmins((prev) =>
+        prev.map((a) => (a.id === editingAdmin.id ? editingAdmin : a))
+      );
+      setEditingAdmin(null);
+      toast({
+        title: 'Admin Updated',
+        description: 'Admin permissions have been updated successfully.',
+      });
+    } catch (error) {
+      console.error('Failed to update admin:', error);
+      toast({ title: 'Error', description: 'Failed to update admin.', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -239,12 +281,16 @@ export default function Admins() {
       breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Admin Management' }]}
     >
       <div className="space-y-6 animate-fade-in">
+        {/* Backend notice */}
+        <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+          <strong>Note:</strong> The <code>/admin-users</code> list endpoint is not available in the current backend API. New admins can be registered via <code>POST /auth/register</code>, but listing/editing existing admin accounts requires a future backend update.
+        </div>
         {/* Stats */}
         <div className="grid gap-4 md:grid-cols-3">
           {[
             { label: 'Total Admins', value: admins.length, icon: Users, color: 'bg-primary/10 text-primary' },
             { label: 'Active Admins', value: admins.filter((a) => a.isActive).length, icon: Shield, color: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' },
-            { label: 'Avg. Clients/Admin', value: (mockClients.length / admins.filter((a) => a.isActive).length).toFixed(1), icon: Users, color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' },
+            { label: 'Avg. Clients/Admin', value: admins.filter((a) => a.isActive).length > 0 ? '0' : '0', icon: Users, color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' },
           ].map((stat, index) => (
             <Card 
               key={stat.label}
