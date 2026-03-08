@@ -19,7 +19,7 @@ const getBaseUrl = (): string => {
   
   // Default based on environment
   if (import.meta.env.MODE === 'production') {
-    return import.meta.env.VITE_PRODUCTION_API_URL || 'https://api.taxhub.com/api/v1';
+    return import.meta.env.VITE_PRODUCTION_API_URL || 'https://api.diamondaccounts.ca/v3/api/v1';
   }
   
   return '/api/v1';
