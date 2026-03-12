@@ -139,7 +139,7 @@ class ApiService {
       // legacy nested shape (previous local backend)
       token?: { access_token: string; refresh_token: string; token_type: string; expires_in: number };
       session_id?: string;
-    }>('/admin/auth/login', {
+    }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
       skipAuth: true,
