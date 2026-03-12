@@ -48,25 +48,18 @@ export default function Payments() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // /payments is not available — data comes from filings (paid_amount, payment_status)
-      const [paymentsRes, filingsRes] = await Promise.all([
+      const [paymentsRes, clientsRes] = await Promise.all([
         apiService.getPayments(),
-        apiService.getFilings({ page_size: 100 }),
+        apiService.getClients(),
       ]);
-      const paymentsList = Array.isArray(paymentsRes) ? paymentsRes : (paymentsRes as any)?.payments || [];
+      const paymentsList = paymentsRes?.payments || paymentsRes || [];
       setPayments(paymentsList);
-      const total = paymentsList.reduce((s: number, p: any) => s + (p.amount || 0), 0);
-      setTotalRevenue(total);
-      setAvgPayment(paymentsList.length > 0 ? total / paymentsList.length : 0);
-      // Use filings as the client selector list
-      const filings = filingsRes?.filings || [];
-      setClients(filings.map((f: any) => ({
-        id: f.id,
-        name: f.name || `Filing ${f.filing_year} (${f.id.slice(0, 8)})`,
-      })));
+      setTotalRevenue(paymentsRes?.total_revenue || paymentsList.reduce((s: number, p: any) => s + (p.amount || 0), 0));
+      setAvgPayment(paymentsRes?.avg_payment || (paymentsList.length > 0 ? paymentsList.reduce((s: number, p: any) => s + (p.amount || 0), 0) / paymentsList.length : 0));
+      setClients(clientsRes?.clients || []);
     } catch (error) {
-      console.error('Failed to fetch payment data:', error);
-      toast({ title: 'Error', description: 'Failed to load payment data.', variant: 'destructive' });
+      console.error('Failed to fetch payments:', error);
+      toast({ title: 'Error', description: 'Failed to load payments.', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
@@ -76,11 +69,7 @@ export default function Payments() {
 
   const paymentsWithClient = payments.map((payment: any) => {
     const client = clients.find((c: any) => c.id === payment.client_id);
-    return {
-      ...payment,
-      clientName: client?.name || payment.client_name || `Filing ${payment.filing_year || ''}`,
-      createdAt: new Date(payment.created_at || Date.now()),
-    };
+    return { ...payment, clientName: client?.name || payment.client_name || 'Unknown', createdAt: new Date(payment.created_at || Date.now()) };
   });
 
   const monthlyData = payments.reduce((acc: any[], p: any) => {
@@ -143,11 +132,10 @@ export default function Payments() {
       setNewPayment({ clientId: '', amount: '', method: 'etransfer', note: '' });
       setIsAddOpen(false);
       toast({
-        title: 'Note',
-        description: 'Payment recording is not yet available in the backend API. Data shown is derived from filing records.',
-        variant: 'destructive',
+        title: 'Payment Added',
+        description: `Payment has been recorded.`,
       });
-      fetchData();
+      fetchData(); // Refresh
     } catch (error) {
       console.error('Failed to add payment:', error);
       toast({ title: 'Error', description: 'Failed to record payment.', variant: 'destructive' });

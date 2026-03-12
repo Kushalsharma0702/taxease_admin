@@ -13,8 +13,10 @@ import {
 } from '@/components/ui/select';
 import { Search, Download, Filter, Clock, User, ArrowRight, Loader2 } from 'lucide-react';
 import { apiService } from '@/services/api';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AuditLogs() {
+  const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState('all');
   const [logs, setLogs] = useState<any[]>([]);
@@ -40,10 +42,11 @@ export default function AuditLogs() {
       setTotalLogs(data?.total || logsList.length);
     } catch (error) {
       console.error('Failed to fetch audit logs:', error);
+      toast({ title: 'Error', description: 'Failed to load audit logs.', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
-  }, [actionFilter]);
+  }, [actionFilter, toast]);
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
@@ -67,10 +70,6 @@ export default function AuditLogs() {
       breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Audit Logs' }]}
     >
       <div className="space-y-6">
-        {/* Backend notice */}
-        <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
-          <strong>Note:</strong> The <code>/audit-logs</code> endpoint is not yet available in the current backend API. Logs will appear here once the backend implements this feature.
-        </div>
         {/* Header */}
         <div className="flex flex-col sm:flex-row gap-4 justify-between">
           <div className="flex gap-3">

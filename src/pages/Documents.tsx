@@ -39,33 +39,26 @@ export default function Documents() {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingDocuments, setIsFetchingDocuments] = useState(true);
 
-  // Fetch files from backend (/files endpoint, mapped as "documents")
+  // Fetch documents from API
   useEffect(() => {
     const fetchDocuments = async () => {
       try {
         setIsFetchingDocuments(true);
-        const result = await apiService.getFiles({ limit: 100 });
-
-        // FileUploadResponse: { id, filename, original_filename, file_type, file_size, upload_status, created_at }
-        const files = result?.files || [];
-        const mapped: DocType[] = files.map((f: any) => ({
-          id: f.id,
-          name: f.original_filename || f.filename,
-          clientId: f.user_id || '',
-          type: f.file_type || 'document',
-          status: f.upload_status === 'completed' ? 'complete' : f.upload_status === 'pending' ? 'pending' : 'pending',
-          version: 1,
-          createdAt: new Date(f.created_at),
-          updatedAt: new Date(f.created_at),
-          file_size: f.file_size,
-        }));
-
-        setDocuments(mapped);
+        const response = await apiService.getDocuments({
+          status: statusFilter !== 'all' ? statusFilter : undefined,
+        });
+        
+        console.log('Documents API response:', response);
+        
+        // Handle the response structure from the API
+        const docs = response?.documents || [];
+        console.log('Extracted documents:', docs);
+        setDocuments(docs);
       } catch (error) {
-        console.error('Failed to fetch files:', error);
+        console.error('Failed to fetch documents:', error);
         toast({
           title: 'Error',
-          description: 'Failed to load files from server.',
+          description: 'Failed to load documents from database.',
           variant: 'destructive',
         });
       } finally {
@@ -74,11 +67,11 @@ export default function Documents() {
     };
 
     fetchDocuments();
-  }, [toast]);
+  }, [statusFilter, toast]);
 
   const documentsWithClient = documents.map((doc) => ({
     ...doc,
-    clientName: (doc as any).client_name || 'Uploaded File',
+    clientName: (doc as any).client_name || 'Unknown',
   }));
 
   const filteredDocs = documentsWithClient.filter((doc) => {

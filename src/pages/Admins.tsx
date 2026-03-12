@@ -65,19 +65,20 @@ export default function Admins() {
       const mapped = (Array.isArray(data) ? data : []).map((a: any) => ({
         id: a.id,
         email: a.email,
-        name: a.name || [a.first_name, a.last_name].filter(Boolean).join(' ') || a.email,
-        role: (a.role || 'admin') as 'admin' | 'superadmin',
+        name: a.name,
+        role: a.role as 'admin' | 'superadmin',
         permissions: a.permissions || [],
-        isActive: a.is_active ?? true,
-        createdAt: new Date(a.created_at || Date.now()),
+        isActive: a.is_active,
+        createdAt: new Date(a.created_at),
       }));
       setAdmins(mapped);
     } catch (error) {
       console.error('Failed to fetch admins:', error);
+      toast({ title: 'Error', description: 'Failed to load admin users.', variant: 'destructive' });
     } finally {
       setIsFetching(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => { fetchAdmins(); }, [fetchAdmins]);
 
@@ -281,10 +282,6 @@ export default function Admins() {
       breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Admin Management' }]}
     >
       <div className="space-y-6 animate-fade-in">
-        {/* Backend notice */}
-        <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
-          <strong>Note:</strong> The <code>/admin-users</code> list endpoint is not available in the current backend API. New admins can be registered via <code>POST /auth/register</code>, but listing/editing existing admin accounts requires a future backend update.
-        </div>
         {/* Stats */}
         <div className="grid gap-4 md:grid-cols-3">
           {[

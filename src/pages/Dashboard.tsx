@@ -30,12 +30,10 @@ export default function Dashboard() {
         apiService.getClients({ page_size: 5 }),
       ]);
       setAnalytics(analyticsData);
-      // filings response: { filings, total } — each filing has id, user_id, status, filing_year
-      const filingsList = clientsData?.filings || clientsData?.clients || [];
-      setRecentClients(filingsList.map((c: any) => ({
+      setRecentClients((clientsData?.clients || []).map((c: any) => ({
         id: c.id,
-        name: c.name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || `Filing ${c.filing_year || ''}`.trim(),
-        email: c.email || c.user_id || '—',
+        name: c.name || `${c.first_name || ''} ${c.last_name || ''}`.trim(),
+        email: c.email,
         status: c.status || 'active',
       })));
     } catch (error) {
