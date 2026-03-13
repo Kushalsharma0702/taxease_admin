@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, Download, Eye, AlertTriangle, Send, X } from 'lucide-react';
+import { FileText, Download, Eye, AlertTriangle, Send, X, CheckCircle2, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
-import { Document } from '@/types';
+import { Document, DocumentStatus } from '@/types';
 import { formatDate } from '@/lib/utils';
 
 interface SectionDocumentsProps {
@@ -21,6 +21,7 @@ interface SectionDocumentsProps {
   documents: Document[];
   onMarkMissing?: (docId: string, message: string) => void;
   onRequestDocument?: (sectionKey: string, message: string) => void;
+  onUpdateDocument?: (docId: string, status: DocumentStatus, reason?: string) => Promise<void> | void;
 }
 
 export function SectionDocuments({
@@ -29,10 +30,12 @@ export function SectionDocuments({
   documents,
   onMarkMissing,
   onRequestDocument,
+  onUpdateDocument,
 }: SectionDocumentsProps) {
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [requestMessage, setRequestMessage] = useState('');
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+  const [actionStatus, setActionStatus] = useState<DocumentStatus | null>(null);
 
   // Filter documents for this section
   const sectionDocs = documents.filter(doc => doc.sectionKey === sectionKey);
@@ -67,16 +70,22 @@ export function SectionDocuments({
   };
 
   const handleMarkMissing = () => {
-    if (selectedDocId && requestMessage.trim()) {
-      onMarkMissing?.(selectedDocId, requestMessage);
-      toast({
-        title: 'Document request sent',
-        description: 'The client will be notified about the missing document.',
-      });
-      setIsRequestDialogOpen(false);
-      setRequestMessage('');
-      setSelectedDocId(null);
+    if (!selectedDocId) return;
+    const reason = requestMessage.trim();
+    if (!reason) return;
+    if (actionStatus && onUpdateDocument) {
+      onUpdateDocument(selectedDocId, actionStatus, reason);
+    } else {
+      onMarkMissing?.(selectedDocId, reason);
     }
+    toast({
+      title: 'Document request sent',
+      description: 'The client will be notified about the missing document.',
+    });
+    setIsRequestDialogOpen(false);
+    setRequestMessage('');
+    setSelectedDocId(null);
+    setActionStatus(null);
   };
 
   const handleRequestForSection = () => {
@@ -89,6 +98,12 @@ export function SectionDocuments({
       setIsRequestDialogOpen(false);
       setRequestMessage('');
     }
+  };
+
+  const openActionDialog = (docId: string, status: DocumentStatus) => {
+    setSelectedDocId(docId);
+    setActionStatus(status);
+    setIsRequestDialogOpen(true);
   };
 
   const getStatusBadge = (doc: Document) => {
@@ -165,21 +180,39 @@ export function SectionDocuments({
                 >
                   <Download className="h-4 w-4" />
                 </Button>
-                {doc.status !== 'approved' && doc.status !== 'complete' && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-orange-600 hover:text-orange-700"
-                    onClick={() => {
-                      setSelectedDocId(doc.id);
-                      setRequestMessage(`Please upload the missing ${doc.name} document for the ${sectionName} section.`);
-                      setIsRequestDialogOpen(true);
-                    }}
-                    title="Mark as missing"
-                  >
-                    <AlertTriangle className="h-4 w-4" />
-                  </Button>
-                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-orange-600 hover:text-orange-700"
+                  onClick={() => {
+                    setRequestMessage(`Please re-upload ${doc.name} for ${sectionName}.`);
+                    openActionDialog(doc.id, 'reupload_requested');
+                  }}
+                  title="Request re-upload"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-red-600 hover:text-red-700"
+                  onClick={() => {
+                    setRequestMessage(`Reason for rejection of ${doc.name}`);
+                    openActionDialog(doc.id, 'rejected');
+                  }}
+                  title="Reject document"
+                >
+                  <Ban className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-green-600 hover:text-green-700"
+                  onClick={() => onUpdateDocument?.(doc.id, 'approved')}
+                  title="Mark verified"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </div>
@@ -201,7 +234,11 @@ export function SectionDocuments({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {selectedDocId ? 'Mark Document as Missing' : 'Request Document'}
+              {actionStatus === 'rejected'
+                ? 'Reject Document'
+                : actionStatus === 'reupload_requested'
+                  ? 'Request Re-upload'
+                  : 'Request Document'}
             </DialogTitle>
             <DialogDescription>
               Send a request to the client for the missing document.

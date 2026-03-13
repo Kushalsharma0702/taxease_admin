@@ -216,11 +216,6 @@ export default function Communication() {
       title="Communication"
       breadcrumbs={[{ label: 'Communication' }]}
     >
-      <div className="space-y-4">
-      <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
-        <strong>Note:</strong> The chat (<code>/chat</code>) endpoint is not yet available in the current backend API. Message sending is disabled. Filing records are shown for reference.
-      </div>
-      </div>
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Clients List */}
         <Card className="lg:col-span-1">

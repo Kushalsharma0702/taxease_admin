@@ -520,6 +520,13 @@ class ApiService {
     });
   }
 
+  async updateDocument(id: string, data: Partial<{ status: string; notes: string; reason?: string }>) {
+    return this.request<any>(`/documents/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
   async deleteDocument(id: string) {
     return this.deleteFile(id);
   }
@@ -720,19 +727,30 @@ class ApiService {
   // ─── Chat — not implemented in local backend ──────────────────────────────
 
   async getChatMessages(clientId: string) {
-    return { messages: [], total: 0 };
+    const q = new URLSearchParams();
+    q.append('client_id', clientId);
+    return this.request<any>(`/chat/messages?${q.toString()}`);
   }
 
   async sendChatMessage(clientId: string, message: string, senderRole: string = 'admin') {
-    return null;
+    return this.request<any>('/chat/messages', {
+      method: 'POST',
+      body: JSON.stringify({ client_id: clientId, message }),
+    });
   }
 
   async markMessagesAsRead(clientId: string, role: 'client' | 'admin') {
-    return { message: 'ok' };
+    return this.request<any>('/chat/messages/read', {
+      method: 'POST',
+      body: JSON.stringify({ client_id: clientId, role }),
+    });
   }
 
   async getUnreadCount(clientId: string, role: 'client' | 'admin') {
-    return { unread_count: 0 };
+    const q = new URLSearchParams();
+    q.append('client_id', clientId);
+    q.append('role', role);
+    return this.request<any>(`/chat/unread-count?${q.toString()}`);
   }
 }
 

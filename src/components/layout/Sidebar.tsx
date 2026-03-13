@@ -21,7 +21,8 @@ import { PERMISSIONS } from '@/types';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permission: null },
   { name: 'Clients', href: '/clients', icon: Users, permission: null },
-  { name: 'Documents', href: '/documents', icon: FileText, permission: null },
+  // Documents view lives under each client; remove global nav entry.
+  // { name: 'Documents', href: '/documents', icon: FileText, permission: null },
   { name: 'Payments', href: '/payments', icon: CreditCard, permission: PERMISSIONS.ADD_EDIT_PAYMENT },
   { name: 'Analytics', href: '/analytics', icon: BarChart3, permission: PERMISSIONS.VIEW_ANALYTICS },
   { name: 'Admin Management', href: '/admins', icon: UserCog, superadminOnly: true },
