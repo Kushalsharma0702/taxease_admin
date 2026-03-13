@@ -268,7 +268,16 @@ class ApiService {
     filing_year: number;
     assigned_admin_id?: string;
   }) {
-    return this.createFiling({ filing_year: data.filing_year });
+    return this.request<any>('/clients', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: data.name || 'New Client',
+        email: data.email || 'unknown@example.com',
+        phone: data.phone || null,
+        filing_year: data.filing_year,
+        assigned_admin_id: data.assigned_admin_id,
+      }),
+    });
   }
 
   async updateClient(id: string, data: Partial<{
