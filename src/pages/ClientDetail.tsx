@@ -94,33 +94,21 @@ export default function ClientDetail() {
       if (!id) return;
       setIsLoadingClient(true);
       try {
-        // 1. Fetch client/filing data + T1 form list in parallel
-        const [filingData, t1Forms, docsResp, paymentsResp] = await Promise.all([
+        // 1. Fetch client/filing data + full T1 data + documents/payments
+        const [filingData, userT1Data, docsResp, paymentsResp] = await Promise.all([
           api.getFiling(id),
-          api.getT1PersonalForms().catch(() => []),
+          api.getUserT1FormData(id).catch(() => null),
           api.getDocuments({ client_id: id }).catch(() => ({ documents: [], total: 0 })),
           api.getPayments({ client_id: id }).catch(() => []),
         ]);
 
-        // 2. Find matching T1 form for this filing
-        const matchedT1Summary = Array.isArray(t1Forms)
-          ? t1Forms.find((f: any) => f.filing_id === id || f.id === id)
-          : null;
-
-        // 3. If found, fetch full T1 form detail with answers
-        let fullT1Form = null;
-        if (matchedT1Summary?.id) {
-          try {
-            fullT1Form = await api.getT1Form(matchedT1Summary.id);
-          } catch {
-            fullT1Form = matchedT1Summary; // fallback to summary if detail fails
-          }
-        }
+        // 2. userT1Data shape: { user_id, has_t1_form, t1_form: { ...answers } }
+        const fullT1Form = userT1Data?.t1_form || null;
 
         setUserFilings(filingData ? [filingData] : []);
         setT1FormData(fullT1Form || null);
 
-        // 4. Build questionnaire from T1 answers if available
+        // 3. Build questionnaire from T1 answers if available
         if (fullT1Form?.answers?.length) {
           const questions = fullT1Form.answers.map((a: any, i: number) => {
             const rawValue = a.value ?? a.value_text ?? (a.value_numeric != null ? String(a.value_numeric) : null) ?? (a.value_boolean != null ? String(a.value_boolean) : null) ?? '';
@@ -143,7 +131,7 @@ export default function ClientDetail() {
           });
         }
 
-        // 5. Set documents and payments from real API
+        // 4. Set documents and payments from real API
         setDocuments((docsResp as any)?.documents || []);
         setPayments(Array.isArray(paymentsResp) ? paymentsResp : []);
 

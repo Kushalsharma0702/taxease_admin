@@ -298,12 +298,19 @@ class ApiService {
   }
 
   async getUserT1FormData(userId: string) {
-    // Try to get T1 form data for this user via /tax/t1-personal
+    // Primary admin API endpoint for full T1 payload (includes answers)
     try {
-      const forms = await this.getT1PersonalForms();
-      return Array.isArray(forms) ? forms.find((f: any) => f.filing_id === userId || f.user_id === userId) || null : null;
+      return await this.request<any>(`/users/${userId}/t1-form-data`);
     } catch {
-      return null;
+      // Backward-compatible fallback for older environments
+      try {
+        const forms = await this.getT1PersonalForms();
+        return Array.isArray(forms)
+          ? forms.find((f: any) => f.filing_id === userId || f.user_id === userId) || null
+          : null;
+      } catch {
+        return null;
+      }
     }
   }
 
