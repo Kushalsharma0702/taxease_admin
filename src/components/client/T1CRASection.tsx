@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Children, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +28,7 @@ export function T1CRASection({
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
+  const hasRenderableChildren = Children.count(children) > 0;
 
   const handleCopySection = async () => {
     if (!sectionData || !applicable) return;
@@ -117,12 +118,18 @@ export function T1CRASection({
       </CardHeader>
       {expanded && (
         <CardContent className="pt-0">
-          {applicable ? (
+          {!applicable && (
+            <div className="mb-4 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              Answer marked as <span className="font-medium">No / Not Applicable</span>. All sub-fields are shown below for admin review.
+            </div>
+          )}
+
+          {hasRenderableChildren ? (
             children
           ) : (
             <div className="py-4 text-center">
               <p className="text-sm text-muted-foreground italic">
-                {title}: Not Applicable
+                No data provided by client for this section (N/A).
               </p>
             </div>
           )}
