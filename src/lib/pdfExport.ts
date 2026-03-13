@@ -2,7 +2,6 @@ import jsPDF from 'jspdf';
 // @ts-ignore - jspdf-autotable doesn't have types
 import autoTable from 'jspdf-autotable';
 import { Client, Document, Payment, Note, TaxFile, T1Questionnaire } from '@/types';
-import { T1FormData } from '@/types/t1-forms';
 import { formatCurrency, formatDate } from './utils';
 import { getT1FormData } from '@/data/mockT1FormData';
 import { CATEGORY_TO_SECTION_KEY } from './api/config';
@@ -76,8 +75,8 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
   const doc = new jsPDF();
   let yPosition = 20;
 
-  // Get T1 form data
-  const t1FormData = getT1FormData(client.id);
+  // Use live questionnaire data if available; fallback to mock data only when needed.
+  const t1FormData = questionnaire?.questions?.length ? null : getT1FormData(client.id);
 
   // Helper function to add new page if needed
   const checkNewPage = (requiredSpace: number) => {
@@ -156,28 +155,55 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
 
   // ============ PERSONAL INFORMATION ============
   addSectionHeader('Individual Information', true);
-  
-  if (t1FormData?.personalInfo) {
-    const pi = t1FormData.personalInfo;
-    const personalData = [
-      ['Full Name', `${pi.firstName} ${pi.middleName || ''} ${pi.lastName}`.trim()],
-      ['SIN', pi.sin],
-      ['Date of Birth', pi.dateOfBirth],
-      ['Marital Status', pi.maritalStatus],
-      ['Email', pi.email],
-      ['Phone', pi.phone],
-      ['Address', formatAddress(pi.currentAddress)],
-    ];
+  const pi = t1FormData?.personalInfo;
+  const personalData = [
+    ['Full Name', pi ? `${pi.firstName} ${pi.middleName || ''} ${pi.lastName}`.trim() : client.name || 'N/A'],
+    ['SIN', pi?.sin || 'N/A'],
+    ['Date of Birth', pi?.dateOfBirth || 'N/A'],
+    ['Marital Status', pi?.maritalStatus || 'N/A'],
+    ['Email', pi?.email || client.email || 'N/A'],
+    ['Phone', pi?.phone || client.phone || 'N/A'],
+    ['Address', pi?.currentAddress ? formatAddress(pi.currentAddress) : 'N/A'],
+  ];
+
+  autoTable(doc, {
+    startY: yPosition,
+    body: personalData,
+    theme: 'plain',
+    styles: { fontSize: 9, cellPadding: 2 },
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 } },
+  } as any);
+
+  yPosition = (doc as any).lastAutoTable?.finalY + 10 || yPosition + 30;
+
+  // ============ QUESTIONNAIRE ANSWERS (LIVE) ============
+  if (questionnaire?.questions?.length) {
+    checkNewPage(40);
+    addSectionHeader('Questionnaire Answers (Live Data)', true);
+
+    const answerRows = questionnaire.questions.map((q, idx) => [
+      `Q${idx + 1}`,
+      q.question || 'N/A',
+      q.answer === '' || q.answer === null || q.answer === undefined ? 'N/A' : String(q.answer),
+      q.category || 'General',
+    ]);
 
     autoTable(doc, {
       startY: yPosition,
-      body: personalData,
-      theme: 'plain',
-      styles: { fontSize: 9, cellPadding: 2 },
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 } },
+      head: [['#', 'Question', 'Answer', 'Category']],
+      body: answerRows,
+      theme: 'grid',
+      headStyles: { fillColor: [66, 139, 202], fontSize: 8 },
+      styles: { fontSize: 7, cellPadding: 2 },
+      columnStyles: {
+        0: { cellWidth: 10 },
+        1: { cellWidth: 90 },
+        2: { cellWidth: 35 },
+        3: { cellWidth: 40 },
+      },
     } as any);
 
-    yPosition = (doc as any).lastAutoTable?.finalY + 10 || yPosition + 30;
+    yPosition = (doc as any).lastAutoTable?.finalY + 8 || yPosition + 25;
   }
 
   // ============ T1 FORM SECTIONS ============

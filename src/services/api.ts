@@ -687,6 +687,27 @@ class ApiService {
     return this.updateClient(clientId, { status });
   }
 
+  // ─── Notifications (/notifications) ─────────────────────────────────────
+
+  async sendClientNotification(data: {
+    client_id: string;
+    type?: string;
+    title: string;
+    message: string;
+  }) {
+    return this.request<any>('/notifications', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getClientNotifications(clientId: string, unreadOnly = false) {
+    const q = new URLSearchParams();
+    q.append('client_id', clientId);
+    if (unreadOnly) q.append('unread_only', 'true');
+    return this.request<any>(`/notifications?${q.toString()}`);
+  }
+
   // ─── Chat — not implemented in local backend ──────────────────────────────
 
   async getChatMessages(clientId: string) {

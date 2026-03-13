@@ -329,11 +329,20 @@ export default function ClientDetail() {
     setPaymentRequestNote('');
     setIsPaymentRequestOpen(false);
     setIsLoading(false);
+    try {
+      await api.sendClientNotification({
+        client_id: client.id,
+        type: 'payment_request',
+        title: 'Payment Request',
+        message: `A payment request of ${formatCurrency(amount)} was created.${paymentRequestNote ? ` Note: ${paymentRequestNote}` : ''}`,
+      });
+    } catch {
+      // Keep UX non-blocking if notification/email dispatch fails.
+    }
     toast({ 
       title: 'Payment Request Sent', 
       description: `Payment request of ${formatCurrency(amount)} sent to client.` 
     });
-    // TODO: Trigger email notification to client
   };
 
   const handleMarkPaymentReceived = async (paymentId: string) => {
@@ -372,6 +381,15 @@ export default function ClientDetail() {
   };
 
   const handleRequestDocument = (docName?: string, reason?: string) => {
+    api.sendClientNotification({
+      client_id: client.id,
+      type: 'document_request',
+      title: 'Document Request',
+      message: docName
+        ? `Please upload/re-upload document: ${docName}.${reason ? ` Reason: ${reason}` : ''}`
+        : `Please upload the requested documents.${reason ? ` Reason: ${reason}` : ''}`,
+    }).catch(() => null);
+
     toast({
       title: 'Request Sent',
       description: docName ? `Request for "${docName}" sent to client.` : 'Document request sent to client.',
@@ -379,18 +397,36 @@ export default function ClientDetail() {
   };
 
   const handleApproveDocument = async (docId: string) => {
+    const approved = documents.find((d) => d.id === docId);
     setDocuments((prev) =>
       prev.map((d) => (d.id === docId ? { ...d, status: 'approved' as DocumentStatus } : d))
     );
+    api.sendClientNotification({
+      client_id: client.id,
+      type: 'document_approved',
+      title: 'Document Approved',
+      message: approved?.name
+        ? `Your document "${approved.name}" has been approved.`
+        : 'A document has been approved by admin.',
+    }).catch(() => null);
     toast({ title: 'Document Approved', description: 'The document has been approved.' });
   };
 
   const handleRequestReupload = async (docId: string, reason: string) => {
+    const target = documents.find((d) => d.id === docId);
     setDocuments((prev) =>
       prev.map((d) =>
         d.id === docId ? { ...d, status: 'reupload_requested' as DocumentStatus, notes: reason } : d
       )
     );
+    api.sendClientNotification({
+      client_id: client.id,
+      type: 'document_reupload',
+      title: 'Re-upload Requested',
+      message: target?.name
+        ? `Please re-upload "${target.name}". Reason: ${reason}`
+        : `Please re-upload the requested document. Reason: ${reason}`,
+    }).catch(() => null);
   };
 
 
@@ -463,6 +499,7 @@ export default function ClientDetail() {
                         payments,
                         notes,
                         taxFiles,
+                        questionnaire,
                       });
                       toast({ 
                         title: 'PDF Exported', 
