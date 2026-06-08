@@ -40,7 +40,11 @@ class ApiService {
     this.baseUrl = baseUrl;
   }
 
-  private async request<T>(
+  async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+    return this._request<T>(endpoint, options);
+  }
+
+  private async _request<T>(
     endpoint: string,
     options: RequestOptions = {}
   ): Promise<T> {
@@ -198,8 +202,9 @@ class ApiService {
 
   // ─── Clients / Filings ────────────────────────────────────────────────────
   //
-  // Local backend exposes /clients — each record = one client / tax return.
-  // Response is normalised so callers using .filings still work.
+  // Production admin-api exposes /users — real app users from the shared DB.
+  // Each user has filing_count, t1_form_count, latest_filing.
+  // Response is normalised so callers using .filings / .clients still work.
 
   async getFilings(params?: {
     page?: number;
@@ -211,16 +216,17 @@ class ApiService {
     const q = new URLSearchParams();
     if (params?.page) q.append('page', String(params.page));
     if (params?.page_size) q.append('page_size', String(params.page_size));
-    if (params?.year) q.append('year', String(params.year));
-    if (params?.status && params.status !== 'all') q.append('status', params.status);
     if (params?.search) q.append('search', params.search);
     const qs = q.toString();
     const result = await this.request<{
-      clients?: any[]; filings?: any[];
+      users?: any[]; clients?: any[]; filings?: any[];
       total: number; page: number; page_size: number; total_pages: number;
-    }>(`/clients${qs ? `?${qs}` : ''}`);
+    }>(`/users${qs ? `?${qs}` : ''}`);
+    // Normalise: /users returns { users, total, page, page_size, total_pages }
+    const records = result.users || result.clients || result.filings || [];
     return {
-      filings: result.clients || result.filings || [],
+      filings: records,
+      clients: records,
       total: result.total,
       page: result.page || 1,
       page_size: result.page_size || 20,
@@ -229,7 +235,7 @@ class ApiService {
   }
 
   async getFiling(id: string) {
-    return this.request<any>(`/clients/${id}`);
+    return this.request<any>(`/users/${id}`);
   }
 
   async getFilingTimeline(id: string) {
@@ -257,7 +263,7 @@ class ApiService {
   }
 
   async getClient(id: string) {
-    return this.getFiling(id);
+    return this.request<any>(`/users/${id}`);
   }
 
   /** Creating a "client" creates a new filing record */
@@ -306,20 +312,14 @@ class ApiService {
     return this.getFiling(userId);
   }
 
-  async getUserT1FormData(userId: string) {
+  async getUserT1FormData(userId: string, filingId?: string) {
     // Primary admin API endpoint for full T1 payload (includes answers)
+    // Pass filingId to get T1 data for a specific filing.
     try {
-      return await this.request<any>(`/users/${userId}/t1-form-data`);
+      const qs = filingId ? `?filing_id=${encodeURIComponent(filingId)}` : '';
+      return await this.request<any>(`/users/${userId}/t1-form-data${qs}`);
     } catch {
-      // Backward-compatible fallback for older environments
-      try {
-        const forms = await this.getT1PersonalForms();
-        return Array.isArray(forms)
-          ? forms.find((f: any) => f.filing_id === userId || f.user_id === userId) || null
-          : null;
-      } catch {
-        return null;
-      }
+      return null;
     }
   }
 
@@ -710,6 +710,12 @@ class ApiService {
     type?: string;
     title: string;
     message: string;
+    // Typed email extras
+    doc_name?: string;
+    amount?: number;
+    new_status?: string;
+    reason?: string;
+    filing_year?: number;
   }) {
     return this.request<any>('/notifications', {
       method: 'POST',
@@ -751,6 +757,47 @@ class ApiService {
     q.append('client_id', clientId);
     q.append('role', role);
     return this.request<any>(`/chat/unread-count?${q.toString()}`);
+  }
+
+  // ─── Public raw request (for ad-hoc endpoints) ───────────────────────────
+  async rawRequest<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+    return this.request<T>(endpoint, options);
+  }
+
+  // ─── Email Threads (/admin/emails) ───────────────────────────────────────
+  async getEmailThreads(): Promise<any[]> {
+    try {
+      const result = await this.request<any[]>('/admin/emails/threads');
+      return Array.isArray(result) ? result : (result as any)?.threads || [];
+    } catch { return []; }
+  }
+
+  async getEmailThread(threadId: string) {
+    return this.request<any>(`/admin/emails/thread/${threadId}`);
+  }
+
+  async sendEmail(data: {
+    client_id: string;
+    subject: string;
+    body: string;
+    thread_id?: string;
+  }) {
+    return this.request<any>('/admin/emails/send', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async sendFilingUpdateEmail(data: {
+    client_id: string;
+    filing_id: string;
+    status: string;
+    message?: string;
+  }) {
+    return this.request<any>('/admin/emails/filing-update', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 }
 

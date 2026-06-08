@@ -48,11 +48,8 @@ export default function Documents() {
           status: statusFilter !== 'all' ? statusFilter : undefined,
         });
         
-        console.log('Documents API response:', response);
-        
         // Handle the response structure from the API
         const docs = response?.documents || [];
-        console.log('Extracted documents:', docs);
         setDocuments(docs);
       } catch (error) {
         console.error('Failed to fetch documents:', error);

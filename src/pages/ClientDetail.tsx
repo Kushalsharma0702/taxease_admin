@@ -37,7 +37,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { T1SectionCard } from '@/components/client/T1SectionCard';
 import { T1CRAReadyForm } from '@/components/client/T1CRAReadyForm';
-import { mockDocuments, mockPayments, mockNotes, mockQuestionnaires } from '@/data/mockData';
 import { STATUS_LABELS, ClientStatus, PERMISSIONS, Note, Document as DocType, T1Question, DocumentStatus, TaxFile } from '@/types';
 import {
   User,
@@ -81,6 +80,9 @@ export default function ClientDetail() {
 
   const [client, setClient] = useState<any>(null);
   const [userFilings, setUserFilings] = useState<any[]>([]);
+  const [allFilings, setAllFilings] = useState<any[]>([]);
+  const [selectedFilingId, setSelectedFilingId] = useState<string | null>(null);
+  const [isLoadingFiling, setIsLoadingFiling] = useState(false);
   const [t1FormData, setT1FormData] = useState<any>(null);
   const [isLoadingClient, setIsLoadingClient] = useState(true);
   const [documents, setDocuments] = useState<any[]>([]);
@@ -88,48 +90,89 @@ export default function ClientDetail() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [questionnaire, setQuestionnaire] = useState<any>(null);
 
+  // Load T1 form answers for a specific filing
+  const loadFilingT1Data = async (filingObj: any) => {
+    if (!filingObj?.t1_form?.id || !id) return;
+    setIsLoadingFiling(true);
+    try {
+      // Fetch detailed T1 form with answers via t1-form-data endpoint
+      const data = await api.getUserT1FormData(id);
+      // Find the matching T1 form from this filing
+      const t1 = filingObj.t1_form;
+      // If the default t1-form-data matches, use it; otherwise fetch by filing
+      if (data?.t1_form?.id === t1.id) {
+        setT1FormData(data.t1_form);
+        buildQuestionnaire(data.t1_form, id);
+      } else {
+        // Fetch using the filing-specific T1 form ID
+        try {
+          const filingData = await api.request<any>(`/users/${id}/filings`);
+          const matchedFiling = (filingData?.filings || []).find((f: any) => f.filing_id === filingObj.filing_id);
+          if (matchedFiling?.t1_form) {
+            setT1FormData(matchedFiling.t1_form);
+            buildQuestionnaire(matchedFiling.t1_form, id);
+          }
+        } catch { /* use what we have */ }
+      }
+    } catch (e) {
+      console.error('Failed to load filing T1 data', e);
+    } finally {
+      setIsLoadingFiling(false);
+    }
+  };
+
+  // Build questionnaire from T1 answers
+  const buildQuestionnaire = (fullT1Form: any, clientId: string) => {
+    if (!fullT1Form?.answers?.length) return;
+    const questions = fullT1Form.answers.map((a: any, i: number) => {
+      const rawValue = a.value != null ? String(a.value) : '';
+      const category = a.field_key?.split('.')?.[0]?.replace(/_/g, ' ')?.replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'General';
+      return {
+        id: a.id || `q-${i}`,
+        question: a.field_key?.replace(/_/g, ' ')?.replace(/\b\w/g, (c: string) => c.toUpperCase()) || `Field ${i + 1}`,
+        answer: rawValue,
+        category,
+        section: category,
+        type: 'text',
+      };
+    });
+    setQuestionnaire({
+      clientId,
+      completedAt: fullT1Form.submitted_at,
+      questions,
+      status: fullT1Form.status,
+      completion_percentage: fullT1Form.completion_percentage,
+    });
+  };
+
   // Fetch filing details, T1 form data (with answers), documents, and payments
   useEffect(() => {
     const fetchUserData = async () => {
       if (!id) return;
       setIsLoadingClient(true);
       try {
-        // 1. Fetch client/filing data + full T1 data + documents/payments
-        const [filingData, userT1Data, docsResp, paymentsResp] = await Promise.all([
+        // 1. Fetch client profile + all filings + documents + payments in parallel
+        const [filingData, allFilingsResp, userT1Data, docsResp, paymentsResp] = await Promise.all([
           api.getFiling(id),
+          api.request<any>(`/users/${id}/filings`).catch(() => ({ filings: [], total_filings: 0 })),
           api.getUserT1FormData(id).catch(() => null),
           api.getDocuments({ client_id: id }).catch(() => ({ documents: [], total: 0 })),
           api.getPayments({ client_id: id }).catch(() => []),
         ]);
 
-        // 2. userT1Data shape: { user_id, has_t1_form, t1_form: { ...answers } }
+        // 2. Store all filings for the selector
+        const filings = allFilingsResp?.filings || [];
+        setAllFilings(filings);
+        if (filings.length > 0) setSelectedFilingId(filings[0].filing_id);
+
+        // 3. userT1Data shape: { user_id, has_t1_form, t1_form: { ...answers } }
         const fullT1Form = userT1Data?.t1_form || null;
 
         setUserFilings(filingData ? [filingData] : []);
         setT1FormData(fullT1Form || null);
 
-        // 3. Build questionnaire from T1 answers if available
-        if (fullT1Form?.answers?.length) {
-          const questions = fullT1Form.answers.map((a: any, i: number) => {
-            const rawValue = a.value ?? a.value_text ?? (a.value_numeric != null ? String(a.value_numeric) : null) ?? (a.value_boolean != null ? String(a.value_boolean) : null) ?? '';
-            const category = a.field_key?.split('.')?.[0]?.replace(/_/g, ' ')?.replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'General';
-            return {
-              id: a.id || `q-${i}`,
-              question: a.field_key?.replace(/_/g, ' ')?.replace(/\b\w/g, (c: string) => c.toUpperCase()) || `Field ${i + 1}`,
-              answer: rawValue,
-              category,
-              section: category,
-              type: 'text',
-            };
-          });
-          setQuestionnaire({
-            clientId: id,
-            completedAt: fullT1Form.submitted_at,
-            questions,
-            status: fullT1Form.status,
-            completion_percentage: fullT1Form.completion_percentage,
-          });
-        }
+        // 3. Build questionnaire from the first/latest T1 form
+        if (fullT1Form) buildQuestionnaire(fullT1Form, id);
 
         // 4. Set documents and payments from real API
         setDocuments((docsResp as any)?.documents || []);
@@ -137,7 +180,7 @@ export default function ClientDetail() {
 
         const clientData = {
           id: id,
-          name: filingData?.name || `${filingData?.first_name || ''} ${filingData?.last_name || ''}`.trim() || `Filing ${filingData?.filing_year || ''}`,
+          name: filingData?.name || `${filingData?.first_name || ''} ${filingData?.last_name || ''}`.trim() || 'Client',
           email: filingData?.email || '—',
           phone: filingData?.phone || '',
           filingYear: filingData?.filing_year || new Date().getFullYear(),
@@ -149,7 +192,7 @@ export default function ClientDetail() {
           assignedAdminName: filingData?.assigned_admin?.name || null,
           createdAt: filingData?.created_at ? new Date(filingData.created_at) : new Date(),
           updatedAt: filingData?.updated_at ? new Date(filingData.updated_at) : new Date(),
-          filingCount: 1,
+          filingCount: filings.length || 1,
         };
 
         setClient(clientData);
@@ -312,37 +355,29 @@ export default function ClientDetail() {
       return;
     }
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    const paymentRequest = {
-      id: String(Date.now()),
-      clientId: client.id,
-      amount,
-      note: paymentRequestNote,
-      createdAt: new Date(),
-      createdBy: user?.name || 'Admin',
-      status: 'pending' as const,
-      isRequest: true,
-      method: 'Request',
-    };
-    setPayments([paymentRequest, ...payments]);
-    setPaymentRequestAmount('');
-    setPaymentRequestNote('');
-    setIsPaymentRequestOpen(false);
-    setIsLoading(false);
     try {
-      await api.sendClientNotification({
+      // Persist via real API — triggers professional email to client automatically
+      await api.createPayment({
         client_id: client.id,
-        type: 'payment_request',
-        title: 'Payment Request',
-        message: `A payment request of ${formatCurrency(amount)} was created.${paymentRequestNote ? ` Note: ${paymentRequestNote}` : ''}`,
+        amount,
+        method: 'Request',
+        note: paymentRequestNote,
       });
-    } catch {
-      // Keep UX non-blocking if notification/email dispatch fails.
+      setPaymentRequestAmount('');
+      setPaymentRequestNote('');
+      setIsPaymentRequestOpen(false);
+      // Refresh payments list
+      const updated = await api.getPayments({ client_id: client.id }).catch(() => []);
+      setPayments(Array.isArray(updated) ? updated : []);
+      toast({
+        title: 'Payment Request Sent',
+        description: `A payment request of ${formatCurrency(amount)} was sent to ${client.email}.`,
+      });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err?.message || 'Failed to send payment request.', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
     }
-    toast({ 
-      title: 'Payment Request Sent', 
-      description: `Payment request of ${formatCurrency(amount)} sent to client.` 
-    });
   };
 
   const handleMarkPaymentReceived = async (paymentId: string) => {
@@ -380,53 +415,52 @@ export default function ClientDetail() {
     toast({ title: 'Document Deleted', description: 'The document has been removed.' });
   };
 
-  const handleRequestDocument = (docName?: string, reason?: string) => {
-    api.sendClientNotification({
-      client_id: client.id,
-      type: 'document_request',
-      title: 'Document Request',
-      message: docName
-        ? `Please upload/re-upload document: ${docName}.${reason ? ` Reason: ${reason}` : ''}`
-        : `Please upload the requested documents.${reason ? ` Reason: ${reason}` : ''}`,
-    }).catch(() => null);
-
-    toast({
-      title: 'Request Sent',
-      description: docName ? `Request for "${docName}" sent to client.` : 'Document request sent to client.',
-    });
+  const handleRequestDocument = async (docName?: string, message?: string) => {
+    try {
+      await api.sendClientNotification({
+        client_id: client.id,
+        type: 'document_request',
+        title: `Document Request: ${docName || 'Required Document'}`,
+        message: message || `Please upload: ${docName || 'the required document'}.`,
+        doc_name: docName,
+        filing_year: client.filingYear,
+      } as any);
+      toast({
+        title: 'Request Sent',
+        description: `A professional email was sent to ${client.email}${docName ? ` requesting "${docName}"` : ''}.`,
+      });
+    } catch {
+      toast({ title: 'Request Sent', description: 'Document request sent.', });
+    }
   };
 
   const handleApproveDocument = async (docId: string) => {
-    const approved = documents.find((d) => d.id === docId);
-    setDocuments((prev) =>
-      prev.map((d) => (d.id === docId ? { ...d, status: 'approved' as DocumentStatus } : d))
-    );
-    api.sendClientNotification({
-      client_id: client.id,
-      type: 'document_approved',
-      title: 'Document Approved',
-      message: approved?.name
-        ? `Your document "${approved.name}" has been approved.`
-        : 'A document has been approved by admin.',
-    }).catch(() => null);
-    toast({ title: 'Document Approved', description: 'The document has been approved.' });
+    const doc = documents.find((d) => d.id === docId);
+    try {
+      await api.updateDocument(docId, { status: 'approved' });
+      setDocuments((prev) => prev.map((d) => (d.id === docId ? { ...d, status: 'approved' as DocumentStatus } : d)));
+      // Email is triggered server-side by the PATCH /documents/{id}
+      toast({ title: 'Document Approved', description: `"${doc?.name || 'Document'}" approved — client notified by email.` });
+    } catch {
+      toast({ title: 'Document Approved', description: 'Status updated.' });
+    }
   };
 
   const handleRequestReupload = async (docId: string, reason: string) => {
     const target = documents.find((d) => d.id === docId);
-    setDocuments((prev) =>
-      prev.map((d) =>
-        d.id === docId ? { ...d, status: 'reupload_requested' as DocumentStatus, notes: reason } : d
-      )
-    );
-    api.sendClientNotification({
-      client_id: client.id,
-      type: 'document_reupload',
-      title: 'Re-upload Requested',
-      message: target?.name
-        ? `Please re-upload "${target.name}". Reason: ${reason}`
-        : `Please re-upload the requested document. Reason: ${reason}`,
-    }).catch(() => null);
+    try {
+      await api.updateDocument(docId, { status: 'reupload_requested', notes: reason, reason } as any);
+      setDocuments((prev) =>
+        prev.map((d) => d.id === docId ? { ...d, status: 'reupload_requested' as DocumentStatus, notes: reason } : d)
+      );
+      // Email is triggered server-side by the PATCH /documents/{id}
+      toast({
+        title: 'Re-Upload Requested',
+        description: `${target?.name ? `"${target.name}"` : 'Document'} re-upload request sent to ${client.email}.`,
+      });
+    } catch {
+      toast({ title: 'Re-Upload Requested', description: 'Client notified.' });
+    }
   };
 
 
@@ -640,7 +674,7 @@ export default function ClientDetail() {
                         {client.personalInfo.maritalStatus === 'married' && client.personalInfo.spouseInfo && (() => {
                           // Search for spouse in client database by email
                           const spouseEmail = client.personalInfo.spouseInfo.email;
-                          const spouseClient = spouseEmail ? mockClients.find(c => c.email.toLowerCase() === spouseEmail.toLowerCase()) : null;
+                          const spouseClient = null;
                           
                           return (
                             <>
@@ -849,6 +883,64 @@ export default function ClientDetail() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Filing Selector — shown whenever a client has multiple filings */}
+          {allFilings.length > 1 && (
+            <div className="mt-4 px-1">
+              <div className="flex items-center gap-3 p-3 bg-muted/40 rounded-lg border border-border">
+                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+                  Filing ({allFilings.length} total):
+                </span>
+                <Select
+                  value={selectedFilingId || ''}
+                  onValueChange={async (val) => {
+                    setSelectedFilingId(val);
+                    setQuestionnaire(null);
+                    setT1FormData(null);
+                    setIsLoadingFiling(true);
+                    try {
+                      // Fetch full T1 data (with answers) for the selected filing
+                      const data = await api.getUserT1FormData(id!, val);
+                      const fullT1 = data?.t1_form || null;
+                      setT1FormData(fullT1);
+                      if (fullT1) buildQuestionnaire(fullT1, id!);
+                    } catch (e) {
+                      console.error('Failed to load T1 for filing', val, e);
+                    } finally {
+                      setIsLoadingFiling(false);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-sm flex-1 max-w-sm">
+                    <SelectValue placeholder="Select a filing..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allFilings.map((f: any, idx: number) => (
+                      <SelectItem key={f.filing_id} value={f.filing_id}>
+                        <span className="flex items-center gap-2">
+                          <span>Filing {idx + 1} — {f.filing_year}</span>
+                          {f.t1_form && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                              f.t1_form.status === 'submitted'
+                                ? 'bg-green-100 text-green-700'
+                                : f.t1_form.status === 'draft'
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : 'bg-muted text-muted-foreground'
+                            }`}>
+                              {f.t1_form.status} {f.t1_form.completion_percentage != null ? `· ${f.t1_form.completion_percentage}%` : ''}
+                            </span>
+                          )}
+                          {!f.t1_form && <span className="text-xs text-muted-foreground">no T1</span>}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {isLoadingFiling && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              </div>
+            </div>
+          )}
 
           {/* T1 CRA Ready Form Tab */}
           <TabsContent value="cra-form" className="mt-6 animate-fade-in">

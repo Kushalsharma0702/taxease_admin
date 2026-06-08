@@ -54,7 +54,6 @@ export default function Admins() {
   const [newAdmin, setNewAdmin] = useState({
     name: '',
     email: '',
-    password: 'demo123',
     permissions: [] as string[],
   });
 
@@ -185,19 +184,20 @@ export default function Admins() {
     }
 
     setIsLoading(true);
+    const tempPassword = crypto.randomUUID().slice(0, 12);
     try {
       await apiService.createAdminUser({
         name: newAdmin.name,
         email: newAdmin.email,
-        password: newAdmin.password || 'demo123',
+        password: tempPassword,
         role: 'admin',
         permissions: newAdmin.permissions,
       });
-      setNewAdmin({ name: '', email: '', password: 'demo123', permissions: [] });
+      setNewAdmin({ name: '', email: '', permissions: [] });
       setIsAddOpen(false);
       toast({
         title: 'Admin Created',
-        description: `${newAdmin.name} has been added as an admin.`,
+        description: `${newAdmin.name} has been added. Temporary password: ${tempPassword}`,
       });
       fetchAdmins(); // Refresh
     } catch (error) {

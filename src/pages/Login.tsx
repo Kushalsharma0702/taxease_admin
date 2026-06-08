@@ -29,23 +29,31 @@ export default function Login() {
     e.preventDefault();
     setIsLoading(true);
 
-    const success = await login(email, password);
-    
-    if (success) {
-      toast({
-        title: 'Welcome back!',
-        description: 'You have successfully logged in.',
-      });
-      navigate('/dashboard');
-    } else {
+    try {
+      const success = await login(email, password);
+      
+      if (success) {
+        toast({
+          title: 'Welcome back!',
+          description: 'You have successfully logged in.',
+        });
+        navigate('/dashboard');
+      } else {
+        toast({
+          title: 'Login failed',
+          description: 'Invalid email or password.',
+          variant: 'destructive',
+        });
+      }
+    } catch {
       toast({
         title: 'Login failed',
-        description: 'Invalid email or password. Try demo credentials below.',
+        description: 'An unexpected error occurred. Please try again.',
         variant: 'destructive',
       });
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
 
   return (
@@ -111,14 +119,16 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="mt-6 p-4 rounded-lg bg-muted/50 text-sm animate-fade-in" style={{ animationDelay: '0.2s' }}>
-            <p className="font-medium mb-2">Demo Credentials:</p>
-            <div className="space-y-1 text-muted-foreground">
-              <p><strong>Superadmin:</strong> superadmin@taxease.ca</p>
-              <p><strong>Admin:</strong> admin@taxease.ca</p>
-              <p><strong>Password:</strong> demo123</p>
+          {import.meta.env.DEV && (
+            <div className="mt-6 p-4 rounded-lg bg-muted/50 text-sm animate-fade-in" style={{ animationDelay: '0.2s' }}>
+              <p className="font-medium mb-2">Demo Credentials:</p>
+              <div className="space-y-1 text-muted-foreground">
+                <p><strong>Superadmin:</strong> superadmin@taxease.ca</p>
+                <p><strong>Admin:</strong> admin@taxease.ca</p>
+                <p><strong>Password:</strong> demo123</p>
+              </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>

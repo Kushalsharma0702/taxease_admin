@@ -81,9 +81,9 @@ export default function Clients() {
         assignedAdminName: f.assigned_admin?.name || f.assigned_admin_name || null,
         createdAt: new Date(f.created_at),
         updatedAt: new Date(f.updated_at || f.created_at),
-        filingCount: 1,
-        t1FormCount: 0,
-        latestFiling: new Date(f.created_at),
+        filingCount: f.filing_count ?? f.filingCount ?? 1,
+        t1FormCount: f.t1_form_count ?? f.t1FormCount ?? 0,
+        latestFiling: f.latest_filing ? new Date(f.latest_filing) : new Date(f.created_at),
       }));
 
       setClients(mappedClients);

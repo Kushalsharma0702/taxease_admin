@@ -1,5 +1,4 @@
-import { ReactNode, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
@@ -11,14 +10,7 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children, title, breadcrumbs }: DashboardLayoutProps) {
-  const { user, isLoading } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!isLoading && !user) {
-      navigate('/login');
-    }
-  }, [user, isLoading, navigate]);
+  const { isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -26,10 +18,6 @@ export function DashboardLayout({ children, title, breadcrumbs }: DashboardLayou
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
-  }
-
-  if (!user) {
-    return null;
   }
 
   return (
