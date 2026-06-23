@@ -65,51 +65,36 @@ export default function Communication() {
     return () => clearInterval(fastInterval);
   }, [selectedClient]);
 
-  // Subject for new email compose
-  const [emailSubject, setEmailSubject] = useState('');
-  const [isComposing, setIsComposing] = useState(false);
+  // Auto-scroll when messages change
+  useEffect(() => {
+    if (selectedClientData) {
+      scrollToBottom();
+    }
+  }, [selectedClientData?.messages]);
 
   const loadAllMessages = async (showLoading = true) => {
     try {
       if (showLoading) setIsLoading(true);
-      // Load real users + their email threads
-      const [usersResp, threads] = await Promise.all([
-        apiService.getClients({ page_size: 100 }),
-        apiService.getEmailThreads().catch(() => []),
-      ]);
+      // Fetch filings as the "client" list (mapped — filings are the closest concept in backend)
+      const response = await apiService.getClients();
+      const filings = (response as any).filings || (response as any).clients || (Array.isArray(response) ? response : []);
 
-      const users = (usersResp as any).users || (usersResp as any).filings || (usersResp as any).clients || [];
+      // Chat endpoint is not available — return empty message lists
+      const clientsData: ClientWithMessages[] = await Promise.all(
+        filings.map(async (client: any) => {
+          return {
+            clientId: client.id,
+            clientName: client.name || `Filing ${client.filing_year}`,
+            clientEmail: client.email || client.user_id || '—',
+            messages: [],
+            unreadCount: 0,
+            lastMessageTime: '',
+          };
+        })
+      );
 
-      // Build conversation list from users, enrich with thread messages
-      const threadMap: Record<string, any[]> = {};
-      for (const t of threads) {
-        const cid = t.client_id || t.clientId;
-        if (!threadMap[cid]) threadMap[cid] = [];
-        threadMap[cid].push({
-          id: t.id || t.thread_id,
-          sender_role: 'admin',
-          message: `${t.subject || 'Email'}: ${t.preview || ''}`,
-          created_at: t.created_at || t.last_message_at || '',
-          read_by_client: true,
-          read_by_admin: true,
-        });
-      }
-
-      const clientsData: ClientWithMessages[] = users.map((u: any) => {
-        const msgs = threadMap[u.id] || [];
-        const last = msgs[msgs.length - 1];
-        return {
-          clientId: u.id,
-          clientName: u.name || u.email || 'Unknown',
-          clientEmail: u.email || '',
-          messages: msgs,
-          unreadCount: 0,
-          lastMessageTime: last?.created_at || '',
-        };
-      });
-
+      // Sort by last message time (most recent first)
       clientsData.sort((a, b) => {
-        if (!a.lastMessageTime && !b.lastMessageTime) return 0;
         if (!a.lastMessageTime) return 1;
         if (!b.lastMessageTime) return -1;
         return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
@@ -117,63 +102,89 @@ export default function Communication() {
 
       setClientsWithMessages(clientsData);
     } catch (error: any) {
+      console.error('Failed to load messages:', error);
       if (showLoading) {
-        toast({ title: 'Error', description: 'Failed to load conversations', variant: 'destructive' });
+        toast({
+          title: 'Error',
+          description: error?.data?.detail || 'Failed to load messages',
+          variant: 'destructive',
+        });
       }
     } finally {
       if (showLoading) setIsLoading(false);
     }
   };
 
+  // Fast refresh for selected client only
   const refreshSelectedClientMessages = async () => {
-    // Re-load threads for the selected client
     if (!selectedClient) return;
+    
     try {
-      const threads = await apiService.getEmailThreads();
-      const clientThreads = threads.filter((t: any) => (t.client_id || t.clientId) === selectedClient);
-      setClientsWithMessages((prev) => prev.map((c) => {
-        if (c.clientId !== selectedClient) return c;
-        const msgs = clientThreads.map((t: any) => ({
-          id: t.id || t.thread_id,
-          sender_role: 'admin',
-          message: `${t.subject || 'Email'}: ${t.preview || ''}`,
-          created_at: t.created_at || '',
-          read_by_client: true,
-          read_by_admin: true,
-        }));
-        return { ...c, messages: msgs };
-      }));
-    } catch { /* silent */ }
+      const messagesData = await apiService.getChatMessages(selectedClient);
+      const unreadData = await apiService.getUnreadCount(selectedClient, 'admin');
+      
+      setClientsWithMessages((prev) => {
+        const updated = prev.map((client) => {
+          if (client.clientId === selectedClient) {
+            const messages = messagesData.messages || [];
+            const lastMessage = messages[messages.length - 1];
+            return {
+              ...client,
+              messages: messages,
+              unreadCount: unreadData.unread_count || 0,
+              lastMessageTime: lastMessage?.created_at || client.lastMessageTime,
+            };
+          }
+          return client;
+        });
+        
+        // Re-sort by last message time
+        updated.sort((a, b) => {
+          if (!a.lastMessageTime) return 1;
+          if (!b.lastMessageTime) return -1;
+          return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
+        });
+        
+        return updated;
+      });
+    } catch (error) {
+      // Silent fail for background refresh
+      console.error('Failed to refresh messages:', error);
+    }
   };
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     await loadAllMessages(false);
+    if (selectedClient) {
+      await refreshSelectedClientMessages();
+    }
     setIsRefreshing(false);
-    toast({ title: 'Refreshed', description: 'Conversations updated' });
+    toast({
+      title: 'Refreshed',
+      description: 'Messages updated',
+    });
   };
 
   const handleSendMessage = async () => {
     if (!selectedClient || !newMessage.trim()) return;
-    const clientData = clientsWithMessages.find((c) => c.clientId === selectedClient);
 
     setSendingMessage(true);
     try {
-      await apiService.sendEmail({
-        client_id: selectedClient,
-        subject: emailSubject.trim() || `Message to ${clientData?.clientName || 'client'}`,
-        body: newMessage.trim(),
-      });
+      await apiService.sendChatMessage(selectedClient, newMessage.trim(), 'admin');
       setNewMessage('');
-      setEmailSubject('');
-      setIsComposing(false);
+      // Immediately refresh selected client's messages
       await refreshSelectedClientMessages();
       scrollToBottom();
-      toast({ title: 'Email sent', description: 'Your email has been sent successfully.' });
-    } catch (error: any) {
       toast({
-        title: 'Failed to send',
-        description: error?.message || 'Could not send email. Please try again.',
+        title: 'Message sent',
+        description: 'Your message has been sent successfully.',
+      });
+    } catch (error: any) {
+      console.error('Failed to send message:', error);
+      toast({
+        title: 'Error',
+        description: error?.data?.detail || 'Failed to send message',
         variant: 'destructive',
       });
     } finally {
@@ -181,8 +192,13 @@ export default function Communication() {
     }
   };
 
-  const handleMarkAsRead = async (_clientId: string) => {
-    // Threads are marked as read server-side on open
+  const handleMarkAsRead = async (clientId: string) => {
+    try {
+      await apiService.markMessagesAsRead(clientId, 'admin');
+      await loadAllMessages(); // Refresh to update unread counts
+    } catch (error) {
+      console.error('Failed to mark messages as read:', error);
+    }
   };
 
   const filteredClients = clientsWithMessages.filter((client) => {
@@ -194,13 +210,6 @@ export default function Communication() {
   });
 
   const selectedClientData = clientsWithMessages.find((c) => c.clientId === selectedClient);
-
-  // Auto-scroll when messages change
-  useEffect(() => {
-    if (selectedClientData) {
-      scrollToBottom();
-    }
-  }, [selectedClientData?.messages]);
 
   return (
     <DashboardLayout
@@ -382,23 +391,14 @@ export default function Communication() {
                   )}
                 </div>
 
-                {/* Email Compose */}
-                <div className="border-t p-4 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Input
-                      placeholder="Subject (optional)"
-                      value={emailSubject}
-                      onChange={(e) => setEmailSubject(e.target.value)}
-                      className="text-sm h-8"
-                      disabled={sendingMessage}
-                    />
-                  </div>
+                {/* Message Input */}
+                <div className="border-t p-4">
                   <div className="flex gap-2">
                     <Input
-                      placeholder="Write an email to this client..."
+                      placeholder="Type a message..."
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyDown={(e) => {
+                      onKeyPress={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
                           handleSendMessage();
@@ -417,7 +417,6 @@ export default function Communication() {
                       )}
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">Sends via AWS SES email to the client's email address</p>
                 </div>
               </CardContent>
             </>
