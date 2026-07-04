@@ -297,6 +297,43 @@ class ApiService {
     return this.request<void>(`/clients/${id}`, { method: 'DELETE' });
   }
 
+  // ── Task engine: service config + tasks + subtasks ──
+  async getServiceConfig(clientId: string) {
+    const res = await this.request<any>(`/clients/${clientId}/service-config`);
+    return res?.data ?? {};
+  }
+
+  async updateServiceConfig(clientId: string, config: Record<string, any>) {
+    const res = await this.request<any>(`/clients/${clientId}/service-config`, {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    });
+    return res?.data ?? res;
+  }
+
+  async generateTasks(clientId: string) {
+    const res = await this.request<any>(`/clients/${clientId}/tasks/generate`, { method: 'POST' });
+    return res?.data ?? res;
+  }
+
+  async getClientTasks(clientId: string) {
+    const res = await this.request<any>(`/clients/${clientId}/tasks`);
+    return (res?.data ?? []) as any[];
+  }
+
+  async updateSubtask(taskId: string, subtaskId: string, status: string, note?: string) {
+    const res = await this.request<any>(`/tasks/${taskId}/subtasks/${subtaskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, note }),
+    });
+    return res?.data ?? res;
+  }
+
+  async getTaskTemplates() {
+    const res = await this.request<any>(`/task-templates`);
+    return res?.data ?? {};
+  }
+
   // Legacy alias methods used in ClientDetail
   async getUser(userId: string) {
     return this.getFiling(userId);

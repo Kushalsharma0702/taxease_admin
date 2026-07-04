@@ -40,6 +40,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useToast } from '@/hooks/use-toast';
 import { apiService } from '@/services/api';
+import ServicesTasksTab from '@/components/client/ServicesTasksTab';
 import { Client, Document as DocType } from '@/types';
 
 // T1 Section Configuration
@@ -308,12 +309,18 @@ export default function ClientDetailEnhanced() {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="services">Services &amp; Tasks</TabsTrigger>
             <TabsTrigger value="t1form">T1 Form</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
             <TabsTrigger value="notes">Notes</TabsTrigger>
           </TabsList>
+
+          {/* SERVICES & TASKS TAB */}
+          <TabsContent value="services" className="space-y-6">
+            {id && <ServicesTasksTab clientId={id} />}
+          </TabsContent>
 
           {/* OVERVIEW TAB */}
           <TabsContent value="overview" className="space-y-6">
