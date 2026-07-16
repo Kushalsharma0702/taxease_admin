@@ -89,28 +89,32 @@ export default function ClientDetail() {
   const [payments, setPayments] = useState<any[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [questionnaire, setQuestionnaire] = useState<any>(null);
+  // Real users.id resolved from clients.email (may differ from the URL :id which is clients.id)
+  const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
 
   // Load T1 form answers for a specific filing
   const loadFilingT1Data = async (filingObj: any) => {
     if (!filingObj?.t1_form?.id || !id) return;
     setIsLoadingFiling(true);
+    // Use the resolved users.id (may differ from the URL :id which is clients.id)
+    const uid = resolvedUserId || id;
     try {
       // Fetch detailed T1 form with answers via t1-form-data endpoint
-      const data = await api.getUserT1FormData(id);
+      const data = await api.getUserT1FormData(uid);
       // Find the matching T1 form from this filing
       const t1 = filingObj.t1_form;
       // If the default t1-form-data matches, use it; otherwise fetch by filing
       if (data?.t1_form?.id === t1.id) {
         setT1FormData(data.t1_form);
-        buildQuestionnaire(data.t1_form, id);
+        buildQuestionnaire(data.t1_form, uid);
       } else {
         // Fetch using the filing-specific T1 form ID
         try {
-          const filingData = await api.request<any>(`/users/${id}/filings`);
-          const matchedFiling = (filingData?.filings || []).find((f: any) => f.filing_id === filingObj.filing_id);
+          const filingsData = await api.request<any>(`/users/${uid}/filings`);
+          const matchedFiling = (filingsData?.filings || []).find((f: any) => f.filing_id === filingObj.filing_id);
           if (matchedFiling?.t1_form) {
             setT1FormData(matchedFiling.t1_form);
-            buildQuestionnaire(matchedFiling.t1_form, id);
+            buildQuestionnaire(matchedFiling.t1_form, uid);
           }
         } catch { /* use what we have */ }
       }
@@ -152,13 +156,41 @@ export default function ClientDetail() {
       setIsLoadingClient(true);
       try {
         // 1. Fetch client profile + all filings + documents + payments in parallel
-        const [filingData, allFilingsResp, userT1Data, docsResp, paymentsResp] = await Promise.all([
+        const [filingData, directFilingsResp, directT1Data, docsResp, paymentsResp] = await Promise.all([
           api.getFiling(id),
           api.request<any>(`/users/${id}/filings`).catch(() => ({ filings: [], total_filings: 0 })),
           api.getUserT1FormData(id).catch(() => null),
           api.getDocuments({ client_id: id }).catch(() => ({ documents: [], total: 0 })),
           api.getPayments({ client_id: id }).catch(() => []),
         ]);
+
+        // 2. If no T1 data returned, the URL param is a clients.id UUID which differs from
+        //    the users.id UUID. Resolve via email: search users by the client's email and retry.
+        let allFilingsResp = directFilingsResp;
+        let userT1Data = directT1Data;
+        let effectiveUserId = id;
+        if (!directT1Data?.has_t1_form && filingData?.email) {
+          try {
+            const usersResp = await api.request<any>(
+              `/users?search=${encodeURIComponent(filingData.email)}&page_size=1`
+            );
+            const foundUser = (usersResp?.users ?? [])[0];
+            if (foundUser?.id && foundUser.id !== id) {
+              effectiveUserId = foundUser.id;
+              const [resolvedT1, resolvedFilings] = await Promise.all([
+                api.getUserT1FormData(foundUser.id).catch(() => null),
+                api.request<any>(`/users/${foundUser.id}/filings`).catch(
+                  () => ({ filings: [], total_filings: 0 })
+                ),
+              ]);
+              userT1Data = resolvedT1;
+              allFilingsResp = resolvedFilings;
+            }
+          } catch {
+            // keep original empty results
+          }
+        }
+        setResolvedUserId(effectiveUserId);
 
         // 2. Store all filings for the selector
         const filings = allFilingsResp?.filings || [];
@@ -900,11 +932,12 @@ export default function ClientDetail() {
                     setT1FormData(null);
                     setIsLoadingFiling(true);
                     try {
-                      // Fetch full T1 data (with answers) for the selected filing
-                      const data = await api.getUserT1FormData(id!, val);
+                      // Use resolvedUserId so the filing_id filter hits the right user's forms
+                      const uid = resolvedUserId || id!;
+                      const data = await api.getUserT1FormData(uid, val);
                       const fullT1 = data?.t1_form || null;
                       setT1FormData(fullT1);
-                      if (fullT1) buildQuestionnaire(fullT1, id!);
+                      if (fullT1) buildQuestionnaire(fullT1, uid);
                     } catch (e) {
                       console.error('Failed to load T1 for filing', val, e);
                     } finally {

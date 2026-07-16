@@ -306,20 +306,15 @@ class ApiService {
     return this.getFiling(userId);
   }
 
-  async getUserT1FormData(userId: string) {
+  async getUserT1FormData(userId: string, filingId?: string) {
     // Primary admin API endpoint for full T1 payload (includes answers)
+    const url = filingId
+      ? `/users/${userId}/t1-form-data?filing_id=${filingId}`
+      : `/users/${userId}/t1-form-data`;
     try {
-      return await this.request<any>(`/users/${userId}/t1-form-data`);
+      return await this.request<any>(url);
     } catch {
-      // Backward-compatible fallback for older environments
-      try {
-        const forms = await this.getT1PersonalForms();
-        return Array.isArray(forms)
-          ? forms.find((f: any) => f.filing_id === userId || f.user_id === userId) || null
-          : null;
-      } catch {
-        return null;
-      }
+      return null;
     }
   }
 
