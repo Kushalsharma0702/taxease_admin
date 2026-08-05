@@ -747,6 +747,19 @@ class ApiService {
     q.append('role', role);
     return this.request<any>(`/chat/unread-count?${q.toString()}`);
   }
+
+  // ─── Invite Client (/invite) ──────────────────────────────────────────────
+
+  async inviteClient(data: {
+    email: string;
+    client_name?: string;
+    personal_message?: string;
+  }) {
+    return this.request<any>('/invite', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 export const apiService = new ApiService();

@@ -246,3 +246,164 @@ async def get_t1_personal_form(
     if not match:
         raise HTTPException(status_code=404, detail="T1 form not found")
     return match
+
+
+# ─── /users/{user_id}/t1-form-data (frontend compat) ─────────────────────────
+
+users_router = APIRouter()
+
+
+@users_router.get("/{user_id}/t1-form-data")
+async def get_user_t1_form_data(
+    user_id: UUID,
+    filing_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_admin = Depends(get_current_admin)
+):
+    """
+    Get full T1 form data for a user (most recent or specified filing).
+    Returns the t1_form with embedded answers array.
+    """
+    where = "WHERE tf.user_id = :user_id"
+    params: dict = {"user_id": str(user_id)}
+    if filing_id:
+        where += " AND tf.filing_id = :filing_id"
+        params["filing_id"] = filing_id
+
+    sql = text(f"""
+        SELECT tf.id, tf.filing_id, tf.user_id, tf.status, tf.is_locked,
+               tf.completion_percentage, tf.submitted_at, tf.created_at, tf.updated_at,
+               u.first_name || ' ' || u.last_name AS client_name,
+               u.email AS client_email,
+               f.filing_year
+        FROM t1_forms tf
+        JOIN users u ON u.id = tf.user_id
+        JOIN filings f ON f.id = tf.filing_id
+        {where}
+        ORDER BY tf.updated_at DESC
+        LIMIT 1
+    """)
+    result = await db.execute(sql, params)
+    row = result.fetchone()
+
+    if not row:
+        return {"t1_form": None, "filings": [], "has_t1_form": False}
+
+    answers = await _get_t1_answers(db, str(row.id))
+
+    t1_form = {
+        "id":                   str(row.id),
+        "filing_id":            str(row.filing_id),
+        "user_id":              str(row.user_id),
+        "status":               row.status,
+        "is_locked":            row.is_locked,
+        "completion_percentage": row.completion_percentage,
+        "submitted_at":         row.submitted_at.isoformat() if row.submitted_at else None,
+        "created_at":           row.created_at.isoformat() if row.created_at else None,
+        "updated_at":           row.updated_at.isoformat() if row.updated_at else None,
+        "client_name":          row.client_name,
+        "client_email":         row.client_email,
+        "filing_year":          row.filing_year,
+        "answers":              answers,
+        "answers_count":        len(answers),
+    }
+
+    # Also list all filings for this user (for multi-year selector in admin)
+    filings_sql = text("""
+        SELECT f.id AS filing_id, f.filing_year, f.status,
+               tf2.id AS t1_form_id, tf2.status AS t1_status, tf2.completion_percentage
+        FROM filings f
+        LEFT JOIN t1_forms tf2 ON tf2.filing_id = f.id
+        WHERE f.user_id = :user_id
+        ORDER BY f.filing_year DESC
+    """)
+    filings_result = await db.execute(filings_sql, {"user_id": str(user_id)})
+    filings = [{
+        "filing_id": str(fr.filing_id),
+        "filing_year": fr.filing_year,
+        "status": fr.status,
+        "t1_form": {
+            "id": str(fr.t1_form_id),
+            "status": fr.t1_status,
+            "completion_percentage": fr.completion_percentage,
+        } if fr.t1_form_id else None
+    } for fr in filings_result.fetchall()]
+
+    return {"t1_form": t1_form, "filings": filings, "has_t1_form": True}
+
+
+@users_router.get("/{user_id}/filings")
+async def get_user_filings(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_admin = Depends(get_current_admin)
+):
+    """
+    Get all filings for a user with T1 form info.
+    """
+    sql = text("""
+        SELECT f.id AS filing_id, f.filing_year, f.status, f.total_fee,
+               f.created_at, f.updated_at,
+               tf.id AS t1_form_id, tf.status AS t1_status,
+               tf.completion_percentage, tf.submitted_at
+        FROM filings f
+        LEFT JOIN t1_forms tf ON tf.filing_id = f.id
+        WHERE f.user_id = :user_id
+        ORDER BY f.filing_year DESC
+    """)
+    result = await db.execute(sql, {"user_id": str(user_id)})
+    filings = []
+    for r in result.fetchall():
+        filing = {
+            "filing_id": str(r.filing_id),
+            "filing_year": r.filing_year,
+            "status": r.status,
+            "total_fee": float(r.total_fee or 0),
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+            "t1_form": None,
+        }
+        if r.t1_form_id:
+            filing["t1_form"] = {
+                "id": str(r.t1_form_id),
+                "status": r.t1_status,
+                "completion_percentage": r.completion_percentage,
+                "submitted_at": r.submitted_at.isoformat() if r.submitted_at else None,
+            }
+        filings.append(filing)
+
+    return {"filings": filings, "total_filings": len(filings)}
+
+
+@users_router.get("")
+async def search_users(
+    search: Optional[str] = Query(None),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_admin = Depends(get_current_admin)
+):
+    """Search users by email or name (for admin lookup)."""
+    where = ""
+    params: dict = {"limit": page_size}
+    if search:
+        where = "WHERE u.email ILIKE :search OR (u.first_name || ' ' || u.last_name) ILIKE :search"
+        params["search"] = f"%{search}%"
+
+    sql = text(f"""
+        SELECT u.id, u.email, u.first_name, u.last_name, u.phone, u.created_at
+        FROM users u
+        {where}
+        ORDER BY u.created_at DESC
+        LIMIT :limit
+    """)
+    result = await db.execute(sql, params)
+    users = [{
+        "id": str(r.id),
+        "email": r.email,
+        "first_name": r.first_name,
+        "last_name": r.last_name,
+        "phone": r.phone,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+    } for r in result.fetchall()]
+
+    return {"users": users, "total": len(users)}

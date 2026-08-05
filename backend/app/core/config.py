@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     
     # Database - Using same database as client backend
     DATABASE_URL: str = Field(
-        default="postgresql+asyncpg://postgres:Kushal07@localhost:5432/taxease_db",
+        default="postgresql+asyncpg://postgres:Kushal07@localhost:5432/CA_Project",
         env="DATABASE_URL"
     )
     
@@ -91,6 +91,14 @@ class Settings(BaseSettings):
     # Pagination
     DEFAULT_PAGE_SIZE: int = Field(default=20, env="DEFAULT_PAGE_SIZE")
     MAX_PAGE_SIZE: int = Field(default=100, env="MAX_PAGE_SIZE")
+
+    # Email (AWS SES)
+    ENABLE_EMAIL_NOTIFICATIONS: bool = Field(default=True, env="ENABLE_EMAIL_NOTIFICATIONS")
+    SES_FROM_EMAIL: str = Field(default="app.support@diamondaccounts.ca", env="SES_FROM_EMAIL")
+    SENDER_NAME: str = Field(default="TaxEase Admin", env="SENDER_NAME")
+    AWS_REGION: str = Field(default="ca-central-1", env="AWS_REGION")
+    AWS_ACCESS_KEY_ID: Optional[str] = Field(default=None, env="AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY: Optional[str] = Field(default=None, env="AWS_SECRET_ACCESS_KEY")
     
 # Global settings instance
 settings = Settings()

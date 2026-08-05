@@ -1,122 +1,134 @@
 """
-Document routes
+Document routes — reads from production documents table (keyed by filing_id).
+The frontend passes client_id which may be a filing.id or user.id;
+we resolve to all matching documents.
 """
 from typing import Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
-from sqlalchemy.orm import selectinload
+from sqlalchemy import text
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_admin
-from app.core.utils import create_audit_log
-from app.models.document import Document
-from app.models.client import Client
-from app.schemas.document import DocumentCreate, DocumentUpdate, DocumentResponse, DocumentListResponse
 
 router = APIRouter()
 
 
-@router.get("", response_model=DocumentListResponse)
+@router.get("")
 async def get_documents(
     status_filter: Optional[str] = Query(None, alias="status"),
     search: Optional[str] = None,
-    client_id: Optional[UUID] = Query(None),
+    client_id: Optional[str] = Query(None),
+    filing_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_admin = Depends(get_current_admin)
+    current_admin=Depends(get_current_admin)
 ):
-    """Get all documents with filters"""
-    query = select(Document).options(selectinload(Document.client))
+    """
+    Get documents from the production documents table.
     
-    conditions = []
-    if status_filter:
-        conditions.append(Document.status == status_filter)
-    if client_id:
-        conditions.append(Document.client_id == client_id)
-    if search:
-        conditions.append(
-            or_(
-                Document.name.ilike(f"%{search}%"),
-            )
+    The production schema uses filing_id (not client_id).
+    client_id param is treated as user_id OR filing_id for backwards compat.
+    """
+    where_clauses = []
+    params: dict = {}
+
+    if filing_id:
+        where_clauses.append("d.filing_id = :filing_id")
+        params["filing_id"] = filing_id
+    elif client_id:
+        # client_id might be a user_id or a filing_id — resolve both
+        where_clauses.append(
+            "(d.filing_id = :cid::uuid OR d.filing_id IN (SELECT id FROM filings WHERE user_id = :cid::uuid))"
         )
-    
-    if conditions:
-        query = query.where(and_(*conditions))
-    
-    query = query.order_by(Document.created_at.desc())
-    result = await db.execute(query)
-    documents = result.scalars().all()
-    
-    # Count total
-    count_query = select(func.count()).select_from(Document)
-    if conditions:
-        count_query = count_query.where(and_(*conditions))
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
-    
-    # Format response
-    doc_responses = []
-    for doc in documents:
-        doc_dict = DocumentResponse.model_validate(doc).model_dump()
-        if doc.client:
-            doc_dict["client_name"] = doc.client.name
-        doc_responses.append(DocumentResponse(**doc_dict))
-    
-    return DocumentListResponse(documents=doc_responses, total=total)
+        params["cid"] = client_id
+
+    if status_filter:
+        where_clauses.append("d.status = :status_filter")
+        params["status_filter"] = status_filter
+
+    if search:
+        where_clauses.append("(d.name ILIKE :search OR d.original_filename ILIKE :search)")
+        params["search"] = f"%{search}%"
+
+    where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+    sql = text(f"""
+        SELECT
+            d.id, d.filing_id, d.name, d.original_filename,
+            d.file_type, d.file_size, d.file_path,
+            d.section_name, d.document_type, d.status,
+            d.created_at, d.updated_at,
+            u.first_name || ' ' || u.last_name AS client_name,
+            u.email AS client_email
+        FROM documents d
+        JOIN filings f ON f.id = d.filing_id
+        JOIN users u ON u.id = f.user_id
+        {where_sql}
+        ORDER BY d.created_at DESC
+    """)
+
+    result = await db.execute(sql, params)
+    rows = result.fetchall()
+
+    documents = []
+    for r in rows:
+        documents.append({
+            "id": str(r.id),
+            "filing_id": str(r.filing_id),
+            "name": r.name,
+            "original_filename": r.original_filename,
+            "file_type": r.file_type,
+            "file_size": r.file_size,
+            "file_path": r.file_path,
+            "section_name": r.section_name,
+            "document_type": r.document_type,
+            "status": r.status or "pending",
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+            "client_name": r.client_name,
+            "client_email": r.client_email,
+        })
+
+    return {"documents": documents, "total": len(documents)}
 
 
-@router.post("", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
-async def create_document(
-    doc_data: DocumentCreate,
+@router.patch("/{document_id}")
+async def update_document_status(
+    document_id: UUID,
+    data: dict,
     db: AsyncSession = Depends(get_db),
-    current_admin = Depends(get_current_admin)
+    current_admin=Depends(get_current_admin)
 ):
-    """Create a new document"""
-    # Verify client exists
-    client_query = select(Client).where(Client.id == doc_data.client_id)
-    client_result = await db.execute(client_query)
-    if not client_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Client not found")
-    
-    document = Document(**doc_data.model_dump())
-    db.add(document)
-    await db.commit()
-    await db.refresh(document)
-    
-    # Create audit log
-    await create_audit_log(
-        db, "Document Created", "document", str(document.id), current_admin.id,
-        new_value=f"Document: {document.name}"
+    """Update document status (approve, request reupload, etc.)"""
+    allowed = {"status", "notes"}
+    updates = {k: v for k, v in data.items() if k in allowed}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+
+    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+    updates["doc_id"] = str(document_id)
+    await db.execute(
+        text(f"UPDATE documents SET {set_clause}, updated_at = NOW() WHERE id = :doc_id"),
+        updates
     )
-    
-    return DocumentResponse.model_validate(document)
+    await db.commit()
+    return {"message": "Document updated", "id": str(document_id)}
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
     document_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_admin = Depends(get_current_admin)
+    current_admin=Depends(get_current_admin)
 ):
     """Delete a document"""
-    query = select(Document).where(Document.id == document_id)
-    result = await db.execute(query)
-    document = result.scalar_one_or_none()
-    
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
-    
-    doc_name = document.name
-    await db.delete(document)
-    await db.commit()
-    
-    # Create audit log
-    await create_audit_log(
-        db, "Document Deleted", "document", str(document_id), current_admin.id,
-        old_value=f"Document: {doc_name}"
+    result = await db.execute(
+        text("SELECT id FROM documents WHERE id = :id"),
+        {"id": str(document_id)}
     )
+    if not result.fetchone():
+        raise HTTPException(status_code=404, detail="Document not found")
 
-
-
-
+    await db.execute(text("DELETE FROM documents WHERE id = :id"), {"id": str(document_id)})
+    await db.commit()

@@ -9,8 +9,10 @@ from .documents import router as documents_router
 from .payments import router as payments_router
 from .analytics import router as analytics_router
 from .audit_logs import router as audit_logs_router
-from .t1_forms import router as t1_forms_router, tax_router as t1_tax_router
+from .t1_forms import router as t1_forms_router, tax_router as t1_tax_router, users_router as t1_users_router
 from .filings import router as filings_router
+from .notifications import router as notifications_router
+from .invite import router as invite_router
 
 api_router = APIRouter()
 
@@ -23,6 +25,9 @@ api_router.include_router(analytics_router,   prefix="/analytics",   tags=["Anal
 api_router.include_router(audit_logs_router,  prefix="/audit-logs",  tags=["Audit Logs"])
 api_router.include_router(t1_forms_router,    prefix="/t1-forms",    tags=["T1 Forms"])
 api_router.include_router(t1_tax_router,      prefix="/tax/t1-personal", tags=["T1 Personal"])
+api_router.include_router(t1_users_router,    prefix="/users",       tags=["User T1 Data"])
 api_router.include_router(filings_router,     prefix="/filings",     tags=["Filings"])
+api_router.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
+api_router.include_router(invite_router,      prefix="/invite",      tags=["Invite Client"])
 
 

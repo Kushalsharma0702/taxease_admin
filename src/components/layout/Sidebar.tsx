@@ -13,6 +13,7 @@ import {
   History,
   ChevronLeft,
   ChevronRight,
+  UserPlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'Clients', href: '/clients', icon: Users, permission: null },
   // Documents view lives under each client; remove global nav entry.
   // { name: 'Documents', href: '/documents', icon: FileText, permission: null },
+  { name: 'Invite Client', href: '/invite-client', icon: UserPlus, permission: null },
   { name: 'Payments', href: '/payments', icon: CreditCard, permission: PERMISSIONS.ADD_EDIT_PAYMENT },
   { name: 'Analytics', href: '/analytics', icon: BarChart3, permission: PERMISSIONS.VIEW_ANALYTICS },
   { name: 'Admin Management', href: '/admins', icon: UserCog, superadminOnly: true },
@@ -47,6 +49,7 @@ export function Sidebar() {
       'Dashboard': 'nav-dashboard',
       'Clients': 'nav-clients',
       'Documents': 'nav-documents',
+      'Invite Client': 'nav-invite-client',
       'Payments': 'nav-payments',
       'Analytics': 'nav-analytics',
       'Admin Management': 'nav-admins',

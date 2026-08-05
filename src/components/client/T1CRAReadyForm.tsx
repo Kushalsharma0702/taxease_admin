@@ -144,13 +144,15 @@ function convertApiDataToFormData(t1Data: any) {
     answersMap.childArtSportActivities = answersMap.childArtSportEntries;
   }
 
-  // 2. movingExpenseIndividual → movingExpenses (remap field names)
+  // 2. movingExpenseIndividual → movingExpenses (remap field names, add hotel fields)
   const meiSrc = answersMap.movingExpenseIndividual || {};
   if ((answersMap.movingExpenseForIndividual || answersMap.hasMovingExpenses) &&
       Object.keys(meiSrc).length && !answersMap.movingExpenses) {
     const airTickets   = parseFloat(meiSrc.airTicketCost)         || 0;
     const movers       = parseFloat(meiSrc.moversAndPackers)       || 0;
     const meals        = parseFloat(meiSrc.mealsAndOtherCost)      || 0;
+    const travelHotel  = parseFloat(meiSrc.travelHotelCost)        || 0;
+    const tempLiving   = parseFloat(meiSrc.tempLivingCost)         || 0;
     const other        = parseFloat(meiSrc.anyOtherCost)           || 0;
     answersMap.movingExpenses = {
       applicable:               true,
@@ -158,16 +160,56 @@ function convertApiDataToFormData(t1Data: any) {
       distanceFromNewToOffice:  meiSrc.distanceFromNewToOffice || '',
       dateOfTravel:             meiSrc.dateOfTravel            || '',
       airTicketsCost:           airTickets,
+      travelHotelName:          meiSrc.travelHotelName         || '',
+      travelHotelNights:        meiSrc.travelHotelNights       || 0,
+      travelHotelCost:          travelHotel,
       moversPackersCost:        movers,
       travelMealsCost:          meals,
+      tempLivingHotelName:      meiSrc.tempLivingHotelName     || '',
+      tempLivingNights:         meiSrc.tempLivingNights        || 0,
+      tempLivingCost:           tempLiving,
       otherMovingCosts:         other,
-      totalMovingCost:          airTickets + movers + meals + other,
+      totalMovingCost:          airTickets + travelHotel + movers + meals + tempLiving + other,
       dateJoinedCompany:        meiSrc.dateOfJoining           || '',
       companyName:              meiSrc.companyName             || '',
       employerAddress:          meiSrc.newEmployerAddress      || '',
       incomeEarnedAfterMove:    parseFloat(meiSrc.grossIncomeAfterMoving) || 0,
       oldAddress:               meiSrc.oldAddress              || '',
       newAddress:               meiSrc.newAddress              || '',
+    };
+  }
+
+  // 2b. movingExpenseSpouse → movingExpensesSpouse
+  const mesSrc = answersMap.movingExpenseSpouse || {};
+  if (answersMap.movingExpenseForSpouse && Object.keys(mesSrc).length) {
+    const airTickets   = parseFloat(mesSrc.airTicketCost)         || 0;
+    const movers       = parseFloat(mesSrc.moversAndPackers)       || 0;
+    const meals        = parseFloat(mesSrc.mealsAndOtherCost)      || 0;
+    const travelHotel  = parseFloat(mesSrc.travelHotelCost)        || 0;
+    const tempLiving   = parseFloat(mesSrc.tempLivingCost)         || 0;
+    const other        = parseFloat(mesSrc.anyOtherCost)           || 0;
+    answersMap.movingExpensesSpouse = {
+      applicable:               true,
+      distanceFromOldToNew:     mesSrc.distanceFromOldToNew    || '',
+      distanceFromNewToOffice:  mesSrc.distanceFromNewToOffice || '',
+      dateOfTravel:             mesSrc.dateOfTravel            || '',
+      airTicketsCost:           airTickets,
+      travelHotelName:          mesSrc.travelHotelName         || '',
+      travelHotelNights:        mesSrc.travelHotelNights       || 0,
+      travelHotelCost:          travelHotel,
+      moversPackersCost:        movers,
+      travelMealsCost:          meals,
+      tempLivingHotelName:      mesSrc.tempLivingHotelName     || '',
+      tempLivingNights:         mesSrc.tempLivingNights        || 0,
+      tempLivingCost:           tempLiving,
+      otherMovingCosts:         other,
+      totalMovingCost:          airTickets + travelHotel + movers + meals + tempLiving + other,
+      dateJoinedCompany:        mesSrc.dateOfJoining           || '',
+      companyName:              mesSrc.companyName             || '',
+      employerAddress:          mesSrc.newEmployerAddress      || '',
+      incomeEarnedAfterMove:    parseFloat(mesSrc.grossIncomeAfterMoving) || 0,
+      oldAddress:               mesSrc.oldAddress              || '',
+      newAddress:               mesSrc.newAddress              || '',
     };
   }
 
@@ -180,9 +222,30 @@ function convertApiDataToFormData(t1Data: any) {
     }));
   }
 
-  // 4. workFromHomeExpense → workFromHome
+  // 4a. workFromHomeExpense (legacy single) → workFromHome
   if (answersMap.workFromHomeExpense && !answersMap.workFromHome) {
     answersMap.workFromHome = answersMap.workFromHomeExpense;
+  }
+  // 4b. workFromHomeIndividual / workFromHomeSpouse → normalized objects
+  const normalizeWfh = (src: any) => src ? {
+    totalHomeArea:   parseFloat(src.totalHouseArea   || src.totalHomeArea)  || 0,
+    workArea:        parseFloat(src.totalWorkArea    || src.workArea)        || 0,
+    rentExpense:     parseFloat(src.rentExpense)     || 0,
+    mortgageInterest:parseFloat(src.mortgageExpense  || src.mortgageInterest)|| 0,
+    internetExpense: parseFloat(src.wifiExpense      || src.internetExpense) || 0,
+    utilities:       parseFloat(src.electricityExpense||src.utilities)       || 0,
+    waterExpense:    parseFloat(src.waterExpense)    || 0,
+    heatExpense:     parseFloat(src.heatExpense)     || 0,
+    homeInsurance:   parseFloat(src.totalInsuranceExpense||src.homeInsurance)|| 0,
+  } : null;
+  if (answersMap.workFromHomeIndividual) {
+    answersMap.wfhIndividual = normalizeWfh(answersMap.workFromHomeIndividual);
+  }
+  if (answersMap.workFromHomeSpouse) {
+    answersMap.wfhSpouse = normalizeWfh(answersMap.workFromHomeSpouse);
+  }
+  if (!answersMap.workFromHome && answersMap.wfhIndividual) {
+    answersMap.workFromHome = answersMap.wfhIndividual;
   }
 
   // 5. disabilityClaimMembers: map approved_year → approvedYear
@@ -283,13 +346,18 @@ function convertApiDataToFormData(t1Data: any) {
     claimableAmount: parseFloat(answersMap.workFromHome.claimableAmount) || 0
   } : null;
   
-  // Convert spouse info
-  const spouseInfo = personalInfo.spouse ? {
-    firstName: safeValue(personalInfo.spouse.firstName),
-    lastName: safeValue(personalInfo.spouse.lastName),
-    sin: safeValue(personalInfo.spouse.sin),
-    dateOfBirth: safeValue(personalInfo.spouse.dateOfBirth),
-    netIncome: parseFloat(personalInfo.spouse.netIncome) || 0
+  // Convert spouse info — prefer spouseInfo nested object, fall back to spouse
+  const spouseSrc = personalInfo.spouseInfo || personalInfo.spouse;
+  const spouseInfo = spouseSrc ? {
+    firstName: safeValue(spouseSrc.firstName),
+    middleName: safeValue(spouseSrc.middleName),
+    lastName: safeValue(spouseSrc.lastName),
+    sin: safeValue(spouseSrc.sin),
+    dateOfBirth: safeValue(spouseSrc.dateOfBirth),
+    email: safeValue(spouseSrc.email),
+    phoneNumber: safeValue(spouseSrc.phoneNumber),
+    dateOfMarriageOrSeparation: safeValue(spouseSrc.dateOfMarriageOrSeparation),
+    netIncome: parseFloat(spouseSrc.netIncome) || 0
   } : null;
   
   // Convert children array
@@ -318,6 +386,7 @@ function convertApiDataToFormData(t1Data: any) {
       email: safeValue(personalInfo.email),
       directDeposit: personalInfo.directDeposit === true,
       bankInfo: personalInfo.bankInfo || null,
+      spouseInfo: spouseInfo,
       spouse: spouseInfo,
       children: children
     },
@@ -328,30 +397,51 @@ function convertApiDataToFormData(t1Data: any) {
     rrspContributions: rrspContributions,
     medicalExpenses: medicalExpenses,
     charitableDonations: charitableDonations,
+    hasMovingExpenses: answersMap.hasMovingExpenses === true,
+    movingExpenseForIndividual: answersMap.movingExpenseForIndividual === true,
+    movingExpenseForSpouse: answersMap.movingExpenseForSpouse === true,
     movingExpenses: answersMap.hasMovingExpenses === true ? (answersMap.movingExpenses || null) : null,
+    movingExpensesSpouse: answersMap.movingExpenseForSpouse === true ? (answersMap.movingExpensesSpouse || null) : null,
     childcare: daycareExpenses,
     unionDues: answersMap.isUnionMember === true ? (Array.isArray(answersMap.unionDues) ? answersMap.unionDues : []) : [],
     professionalDues: professionalDues,
     tuition: answersMap.wasStudentLastYear === true ? (Array.isArray(answersMap.tuition) ? answersMap.tuition : []) : [],
     childrenCredits: childrenCredits,
     foreignProperty: foreignProperties,
+    isFirstHomeBuyer: answersMap.isFirstHomeBuyer === true,
+    propertySaleLongTerm: answersMap.soldPropertyLongTerm === true ? (answersMap.propertySaleLongTerm || null) : null,
+    propertySaleShortTerm: answersMap.soldPropertyShortTerm === true ? (answersMap.propertySaleShortTerm || null) : null,
+    hasWorkFromHomeExpense: answersMap.hasWorkFromHomeExpense === true,
+    workFromHomeForIndividual: answersMap.workFromHomeForIndividual === true,
+    workFromHomeForSpouse: answersMap.workFromHomeForSpouse === true,
     workFromHome: workFromHomeData,
-    firstTimeFiler: answersMap.isFirstTimeFiler === true,
+    wfhIndividual: answersMap.wfhIndividual || null,
+    wfhSpouse: answersMap.wfhSpouse || null,
+    isFirstTimeFiler: answersMap.isFirstTimeFiler === true,
+    firstTimeFilerForIndividual: answersMap.firstTimeFilerForIndividual === true,
+    firstTimeFilerForSpouse: answersMap.firstTimeFilerForSpouse === true,
+    firstTimeFilerIndividual: answersMap.firstTimeFilerIndividual || null,
+    firstTimeFilerSpouse: answersMap.firstTimeFilerSpouse || null,
     disabilities: answersMap.hasDisabilityTaxCredit === true ? (answersMap.disabilities || {}) : null,
+    disabilityTaxCredit: answersMap.hasDisabilityTaxCredit === true
+      ? (Array.isArray(answersMap.disabilityClaimMembers) ? answersMap.disabilityClaimMembers : [])
+      : [],
     homeAccessibility: answersMap.homeAccessibility || null,
     politicalContributions: Array.isArray(answersMap.politicalContributions) ? answersMap.politicalContributions : [],
-    rentPropertyTax: answersMap.provinceRent ? {
-      amount: parseFloat(answersMap.provinceRent.amount) || 0,
-      type: answersMap.provinceRent.type || 'rent',
-      rentOrPropertyTax: answersMap.provinceRent.type === 'rent' ? 'Rent' : 'Property Tax',
-      rentOrOwn: answersMap.provinceRent.type || 'rent',
-      amountPaid: parseFloat(answersMap.provinceRent.amount) || 0,
-      occupancyCost: parseFloat(answersMap.provinceRent.amount) || 0,
-      propertyAddress: personalInfo.currentAddress ? 
-        `${personalInfo.currentAddress.street}, ${personalInfo.currentAddress.city}` : '',
-      postalCode: personalInfo.currentAddress?.postalCode || '',
-      numberOfMonthsResides: 12
-    } : null
+    rentPropertyTax: Array.isArray(answersMap.provinceFilerEntries) && answersMap.provinceFilerEntries.length > 0
+      ? answersMap.provinceFilerEntries[0]
+      : (answersMap.provinceRent ? {
+          rentOrPropertyTax: answersMap.provinceRent.type === 'rent' ? 'Rent' : 'Property Tax',
+          propertyAddress: personalInfo.currentAddress
+            ? `${personalInfo.currentAddress.street}, ${personalInfo.currentAddress.city}` : '',
+          postalCode: personalInfo.currentAddress?.postalCode || '',
+          monthsResides: 12,
+          amountPaid: parseFloat(answersMap.provinceRent.amount) || 0,
+        } : null),
+    deceasedReturn: answersMap.isFilingForDeceased === true ? (answersMap.deceasedReturnInfo || null) : null,
+    otherIncome: answersMap.hasOtherIncome === true && answersMap.otherIncomeDescription
+      ? [{ description: answersMap.otherIncomeDescription, amount: 0 }]
+      : [],
   };
 }
 
@@ -573,6 +663,15 @@ export function T1CRAReadyForm({
             <CopyableField label="Last Name" value={formData.personalInfo.spouseInfo.lastName} />
             <CopyableField label="SIN (Spouse)" value={formData.personalInfo.spouseInfo.sin} />
             <CopyableField label="Date of Birth" value={formatDate(formData.personalInfo.spouseInfo.dateOfBirth)} />
+            {formData.personalInfo.spouseInfo.email && (
+              <CopyableField label="Email" value={formData.personalInfo.spouseInfo.email} />
+            )}
+            {formData.personalInfo.spouseInfo.phoneNumber && (
+              <CopyableField label="Phone Number" value={formData.personalInfo.spouseInfo.phoneNumber} />
+            )}
+            {formData.personalInfo.spouseInfo.dateOfMarriageOrSeparation && (
+              <CopyableField label="Date of Marriage / Separation" value={formatDate(formData.personalInfo.spouseInfo.dateOfMarriageOrSeparation)} />
+            )}
           </div>
         </T1CRASection>
       )}
@@ -707,64 +806,87 @@ export function T1CRAReadyForm({
       <T1CRASection
         title="Q4: Moving Expenses (Province Change)"
         icon={<Truck className="h-5 w-5 text-primary" />}
-        applicable={!!formData.movingExpenses?.applicable}
+        applicable={!!formData.hasMovingExpenses}
         sectionData={formData.movingExpenses as unknown as Record<string, unknown>}
       >
-        {formData.movingExpenses && (
-          <div className="space-y-6">
+        {[
+          formData.movingExpenseForIndividual && formData.movingExpenses
+            ? { label: 'Individual Moving Expenses', data: formData.movingExpenses }
+            : null,
+          formData.movingExpenseForSpouse && formData.movingExpensesSpouse
+            ? { label: 'Spouse Moving Expenses', data: formData.movingExpensesSpouse }
+            : null,
+        ].filter(Boolean).map((entry: any, entryIdx) => (
+          <div key={entryIdx} className="space-y-6 mb-6">
+            {entryIdx > 0 && <Separator />}
+            <h4 className="font-semibold text-base">{entry.label}</h4>
             {/* Addresses & Distances */}
             <div>
-              <h4 className="font-medium text-sm text-muted-foreground mb-3">Addresses & Distances</h4>
+              <h5 className="font-medium text-sm text-muted-foreground mb-3">Addresses & Distances</h5>
               <div className="grid gap-3">
-                <CopyableField label="Old Address" value={typeof formData.movingExpenses.oldAddress === 'string' ? formData.movingExpenses.oldAddress : `${formData.movingExpenses.oldAddress.street}, ${formData.movingExpenses.oldAddress.city}, ${formData.movingExpenses.oldAddress.province} ${formData.movingExpenses.oldAddress.postalCode}`} />
-                <CopyableField label="New Address" value={typeof formData.movingExpenses.newAddress === 'string' ? formData.movingExpenses.newAddress : `${formData.movingExpenses.newAddress.street}, ${formData.movingExpenses.newAddress.city}, ${formData.movingExpenses.newAddress.province} ${formData.movingExpenses.newAddress.postalCode}`} />
+                <CopyableField label="Old Address" value={typeof entry.data.oldAddress === 'string' ? entry.data.oldAddress : ''} />
+                <CopyableField label="New Address" value={typeof entry.data.newAddress === 'string' ? entry.data.newAddress : ''} />
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <CopyableField label="Distance Old → New" value={formData.movingExpenses.distanceFromOldToNew} />
-                  <CopyableField label="Distance New → Office" value={formData.movingExpenses.distanceFromNewToOffice} />
+                  <CopyableField label="Distance Old → New" value={entry.data.distanceFromOldToNew} />
+                  <CopyableField label="Distance New → Office" value={entry.data.distanceFromNewToOffice} />
                 </div>
               </div>
             </div>
-            
             <Separator />
-            
             {/* Travel & Logistics Costs */}
             <div>
-              <h4 className="font-medium text-sm text-muted-foreground mb-3">Travel & Logistics Costs</h4>
+              <h5 className="font-medium text-sm text-muted-foreground mb-3">Travel & Logistics Costs</h5>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <CopyableField label="Date of Travel" value={formatDate(formData.movingExpenses.dateOfTravel)} />
-                <CopyableField label="Air Tickets" value={formatCurrency(formData.movingExpenses.airTicketsCost)} />
-                <CopyableField label="Movers & Packers" value={formatCurrency(formData.movingExpenses.moversPackersCost)} />
-                <CopyableField label="Travel Meals & Accommodation" value={formatCurrency(formData.movingExpenses.travelMealsCost)} />
-                <CopyableField label="Other Moving Costs" value={formatCurrency(formData.movingExpenses.otherMovingCosts)} />
-                <CopyableField label="Total Moving Cost" value={formatCurrency(formData.movingExpenses.totalMovingCost)} />
+                <CopyableField label="Date of Travel" value={formatDate(entry.data.dateOfTravel)} />
+                <CopyableField label="Air Tickets" value={formatCurrency(entry.data.airTicketsCost)} />
+                {entry.data.travelHotelName && (
+                  <CopyableField label="Travel Hotel Name" value={entry.data.travelHotelName} />
+                )}
+                {entry.data.travelHotelNights > 0 && (
+                  <CopyableField label="Travel Hotel Nights" value={String(entry.data.travelHotelNights)} />
+                )}
+                {entry.data.travelHotelCost > 0 && (
+                  <CopyableField label="Travel Hotel Cost" value={formatCurrency(entry.data.travelHotelCost)} />
+                )}
+                <CopyableField label="Movers & Packers" value={formatCurrency(entry.data.moversPackersCost)} />
+                <CopyableField label="Travel Meals & Accommodation" value={formatCurrency(entry.data.travelMealsCost)} />
+                {entry.data.tempLivingHotelName && (
+                  <CopyableField label="Temporary Living Hotel" value={entry.data.tempLivingHotelName} />
+                )}
+                {entry.data.tempLivingNights > 0 && (
+                  <CopyableField label="Temporary Living Nights" value={String(entry.data.tempLivingNights)} />
+                )}
+                {entry.data.tempLivingCost > 0 && (
+                  <CopyableField label="Temporary Living Cost" value={formatCurrency(entry.data.tempLivingCost)} />
+                )}
+                <CopyableField label="Other Moving Costs" value={formatCurrency(entry.data.otherMovingCosts)} />
+                <CopyableField label="Total Moving Cost" value={formatCurrency(entry.data.totalMovingCost)} />
               </div>
             </div>
-            
             <Separator />
-            
             {/* Employment Details After Move */}
             <div>
-              <h4 className="font-medium text-sm text-muted-foreground mb-3">Employment Details After Move</h4>
+              <h5 className="font-medium text-sm text-muted-foreground mb-3">Employment Details After Move</h5>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <CopyableField label="Date of Joining" value={formatDate(formData.movingExpenses.dateJoinedCompany)} />
-                <CopyableField label="Company Name" value={formData.movingExpenses.companyName} />
-                <CopyableField label="Employer Address" value={formData.movingExpenses.employerAddress} />
-                <CopyableField label="Income Earned After Move" value={formatCurrency(formData.movingExpenses.incomeEarnedAfterMove)} />
+                <CopyableField label="Date of Joining" value={formatDate(entry.data.dateJoinedCompany)} />
+                <CopyableField label="Company Name" value={entry.data.companyName} />
+                <CopyableField label="Employer Address" value={entry.data.employerAddress} />
+                <CopyableField label="Income Earned After Move" value={formatCurrency(entry.data.incomeEarnedAfterMove)} />
               </div>
             </div>
-            <QuestionDocuments
-              sectionKey="MOVING_EXPENSES"
-              sectionTitle="Moving Expense Documents"
-              documents={documents}
-              requiredDocuments={['Moving Expense Receipts']}
-              onApprove={onApproveDoc}
-              onRequestReupload={onRequestReupload}
-              onRequestMissing={onRequestMissing}
-              onView={onViewDoc}
-              canEdit={canEdit}
-            />
           </div>
-        )}
+        ))}
+        <QuestionDocuments
+          sectionKey="MOVING_EXPENSES"
+          sectionTitle="Moving Expense Documents"
+          documents={documents}
+          requiredDocuments={['Moving Expense Receipts']}
+          onApprove={onApproveDoc}
+          onRequestReupload={onRequestReupload}
+          onRequestMissing={onRequestMissing}
+          onView={onViewDoc}
+          canEdit={canEdit}
+        />
       </T1CRASection>
 
       {/* Q5: Self-Employment */}
@@ -1028,117 +1150,176 @@ export function T1CRAReadyForm({
       <T1CRASection
         title="Q6: First Home Purchase"
         icon={<Home className="h-5 w-5 text-primary" />}
-        applicable={!!formData.firstHomeBuyer}
-        sectionData={formData.firstHomeBuyer as unknown as Record<string, unknown>}
+        applicable={!!formData.isFirstHomeBuyer}
+        sectionData={{ isFirstHomeBuyer: formData.isFirstHomeBuyer } as Record<string, unknown>}
       >
-        {formData.firstHomeBuyer && (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="sm:col-span-3">
-              <CopyableField label="Property Address" value={formData.firstHomeBuyer.propertyAddress} />
-            </div>
-            <CopyableField label="Purchase Date" value={formatDate(formData.firstHomeBuyer.purchaseDate)} />
-            <CopyableField label="Purchase Price" value={formatCurrency(formData.firstHomeBuyer.purchasePrice)} />
-          </div>
-        )}
+        <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+          <p className="text-sm font-medium">
+            Client purchased their first home in the tax year.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Document required: Statement of Adjustment issued by lawyer
+          </p>
+        </div>
+        <QuestionDocuments
+          sectionKey="FIRST_HOME_BUYER"
+          sectionTitle="First Home Buyer Documents"
+          documents={documents}
+          requiredDocuments={['Statement of Adjustment issued by lawyer']}
+          onApprove={onApproveDoc}
+          onRequestReupload={onRequestReupload}
+          onRequestMissing={onRequestMissing}
+          onView={onViewDoc}
+          canEdit={canEdit}
+        />
       </T1CRASection>
 
       {/* Q7: Sold Property (Long Term > 365 days) */}
       <T1CRASection
         title="Q7: Property Sale (Held > 365 days)"
         icon={<TrendingUp className="h-5 w-5 text-primary" />}
-        applicable={!!formData.capitalGainsLongTerm?.length}
-        sectionData={formData.capitalGainsLongTerm as unknown as Record<string, unknown>}
+        applicable={!!formData.propertySaleLongTerm}
+        sectionData={formData.propertySaleLongTerm as unknown as Record<string, unknown>}
       >
-        {formData.capitalGainsLongTerm?.map((cg, idx) => (
-          <div key={idx} className="mb-6 last:mb-0">
-            <h4 className="font-medium text-sm mb-3">Property {idx + 1}</h4>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="sm:col-span-3">
-                <CopyableField label="Property Address" value={cg.propertyAddress} />
+        {formData.propertySaleLongTerm && (() => {
+          const ps = formData.propertySaleLongTerm;
+          return (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="sm:col-span-3">
+                  <CopyableField label="Property Address" value={ps.propertyAddress} />
+                </div>
+                <CopyableField label="Purchase Date" value={formatDate(ps.purchaseDate)} />
+                <CopyableField label="Sell Date" value={formatDate(ps.sellDate)} />
+                <CopyableField label="Capital Gain Earned" value={formatCurrency(ps.capitalGainEarned)} className="font-semibold" />
               </div>
-              <CopyableField label="Purchase Date" value={formatDate(cg.purchaseDate)} />
-              <CopyableField label="Sell Date" value={formatDate(cg.sellDate)} />
-              <CopyableField label="Purchase & Sell Expenses" value={formatCurrency(cg.purchaseAndSellExpenses)} />
-              <CopyableField label="Capital Gain Earned" value={formatCurrency(cg.capitalGainEarned)} />
+              <Separator />
+              <h5 className="font-medium text-sm text-muted-foreground">Purchase Costs (ACB)</h5>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <CopyableField label="Purchase Price" value={formatCurrency(ps.purchasePriceOfProperty)} />
+                <CopyableField label="Legal Fees on Purchase" value={formatCurrency(ps.legalFeesOnPurchase)} />
+                <CopyableField label="Land Transfer Tax" value={formatCurrency(ps.landTransferTax)} />
+                <CopyableField label="Title Insurance" value={formatCurrency(ps.titleInsurance)} />
+                <CopyableField label="Survey & Appraisal Fees" value={formatCurrency(ps.surveyAndAppraisalFees)} />
+                <CopyableField label="Property Inspection Fees" value={formatCurrency(ps.propertyInspectionFees)} />
+                <CopyableField label="GST/HST on New Home" value={formatCurrency(ps.gstHstOnNewHome)} />
+                <CopyableField label="Major Capital Improvements" value={formatCurrency(ps.majorCapitalImprovements)} />
+                <CopyableField label="Other Purchase Expenses" value={formatCurrency(ps.purchaseOtherExpenses)} />
+              </div>
+              <Separator />
+              <h5 className="font-medium text-sm text-muted-foreground">Sale Costs</h5>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <CopyableField label="Real Estate Brokerage Charges" value={formatCurrency(ps.realEstateBrokerageCharges)} />
+                <CopyableField label="Legal Fees on Sale" value={formatCurrency(ps.legalFeesOnSale)} />
+                <CopyableField label="Advertising & Listing Fees" value={formatCurrency(ps.advertisingAndListingFees)} />
+                <CopyableField label="Home Staging Costs" value={formatCurrency(ps.homeStagingCosts)} />
+                <CopyableField label="Mortgage Discharge / Penalty Fees" value={formatCurrency(ps.mortgageDischargeOrPenaltyFees)} />
+                <CopyableField label="Appraisal Fees on Sale" value={formatCurrency(ps.appraisalFeesOnSale)} />
+                <CopyableField label="Equipment / Renovation During Sale" value={formatCurrency(ps.equipmentOrRenovationDuringSale)} />
+                <CopyableField label="Other Sale Expenses" value={formatCurrency(ps.saleOtherExpenses)} />
+              </div>
             </div>
-            {idx < (formData.capitalGainsLongTerm?.length || 0) - 1 && <Separator className="mt-6" />}
-          </div>
-        ))}
+          );
+        })()}
       </T1CRASection>
 
       {/* Q8: Sold Property (Short Term < 365 days / FLIP) */}
       <T1CRASection
         title="Q8: Property Sale (Held < 365 days / FLIP)"
         icon={<Home className="h-5 w-5 text-primary" />}
-        applicable={!!formData.capitalGainsShortTerm?.length}
-        sectionData={formData.capitalGainsShortTerm as unknown as Record<string, unknown>}
+        applicable={!!formData.propertySaleShortTerm}
+        sectionData={formData.propertySaleShortTerm as unknown as Record<string, unknown>}
       >
-        {formData.capitalGainsShortTerm?.map((cg, idx) => (
-          <div key={idx} className="mb-6 last:mb-0">
-            <h4 className="font-medium text-sm mb-3">Property {idx + 1}</h4>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="sm:col-span-3">
-                <CopyableField label="Property Address" value={cg.propertyAddress} />
+        {formData.propertySaleShortTerm && (() => {
+          const ps = formData.propertySaleShortTerm;
+          return (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="sm:col-span-3">
+                  <CopyableField label="Property Address" value={ps.propertyAddress} />
+                </div>
+                <CopyableField label="Purchase Date" value={formatDate(ps.purchaseDate)} />
+                <CopyableField label="Sell Date" value={formatDate(ps.sellDate)} />
+                <CopyableField label="Capital Gain Earned" value={formatCurrency(ps.capitalGainEarned)} className="font-semibold" />
               </div>
-              <CopyableField label="Purchase Date" value={formatDate(cg.purchaseDate)} />
-              <CopyableField label="Sell Date" value={formatDate(cg.sellDate)} />
-              <CopyableField label="Purchase & Sell Expenses" value={formatCurrency(cg.purchaseAndSellExpenses)} />
+              <Separator />
+              <h5 className="font-medium text-sm text-muted-foreground">Purchase Costs (ACB)</h5>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <CopyableField label="Purchase Price" value={formatCurrency(ps.purchasePriceOfProperty)} />
+                <CopyableField label="Legal Fees on Purchase" value={formatCurrency(ps.legalFeesOnPurchase)} />
+                <CopyableField label="Land Transfer Tax" value={formatCurrency(ps.landTransferTax)} />
+                <CopyableField label="Title Insurance" value={formatCurrency(ps.titleInsurance)} />
+                <CopyableField label="Survey & Appraisal Fees" value={formatCurrency(ps.surveyAndAppraisalFees)} />
+                <CopyableField label="Property Inspection Fees" value={formatCurrency(ps.propertyInspectionFees)} />
+                <CopyableField label="GST/HST on New Home" value={formatCurrency(ps.gstHstOnNewHome)} />
+                <CopyableField label="Major Capital Improvements" value={formatCurrency(ps.majorCapitalImprovements)} />
+                <CopyableField label="Other Purchase Expenses" value={formatCurrency(ps.purchaseOtherExpenses)} />
+              </div>
+              <Separator />
+              <h5 className="font-medium text-sm text-muted-foreground">Sale Costs</h5>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <CopyableField label="Real Estate Brokerage Charges" value={formatCurrency(ps.realEstateBrokerageCharges)} />
+                <CopyableField label="Legal Fees on Sale" value={formatCurrency(ps.legalFeesOnSale)} />
+                <CopyableField label="Advertising & Listing Fees" value={formatCurrency(ps.advertisingAndListingFees)} />
+                <CopyableField label="Home Staging Costs" value={formatCurrency(ps.homeStagingCosts)} />
+                <CopyableField label="Mortgage Discharge / Penalty Fees" value={formatCurrency(ps.mortgageDischargeOrPenaltyFees)} />
+                <CopyableField label="Appraisal Fees on Sale" value={formatCurrency(ps.appraisalFeesOnSale)} />
+                <CopyableField label="Equipment / Renovation During Sale" value={formatCurrency(ps.equipmentOrRenovationDuringSale)} />
+                <CopyableField label="Other Sale Expenses" value={formatCurrency(ps.saleOtherExpenses)} />
+              </div>
             </div>
-            {idx < (formData.capitalGainsShortTerm?.length || 0) - 1 && <Separator className="mt-6" />}
-          </div>
-        ))}
+          );
+        })()}
       </T1CRASection>
 
       {/* Q9: Work From Home (T2200) */}
       <T1CRASection
         title="Q9: Work From Home Expense (T2200)"
         icon={<Home className="h-5 w-5 text-primary" />}
-        applicable={!!formData.workFromHome}
+        applicable={!!formData.hasWorkFromHomeExpense}
         sectionData={formData.workFromHome as unknown as Record<string, unknown>}
       >
-        {formData.workFromHome && (
-          <div className="space-y-4">
+        {[
+          formData.workFromHomeForIndividual && formData.wfhIndividual
+            ? { label: 'Individual WFH Expenses', data: formData.wfhIndividual }
+            : formData.workFromHome
+            ? { label: 'Work From Home Expenses', data: formData.workFromHome }
+            : null,
+          formData.workFromHomeForSpouse && formData.wfhSpouse
+            ? { label: 'Spouse WFH Expenses', data: formData.wfhSpouse }
+            : null,
+        ].filter(Boolean).map((entry: any, entryIdx) => (
+          <div key={entryIdx} className="space-y-4 mb-6">
+            {entryIdx > 0 && <Separator />}
+            <h4 className="font-semibold text-base">{entry.label}</h4>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <CopyableField label="Total House Area (Sq.Ft.)" value={`${formData.workFromHome.totalHomeArea} sq ft`} />
-              <CopyableField label="Total Work Area (Sq.Ft.)" value={`${formData.workFromHome.workArea} sq ft`} />
+              <CopyableField label="Total House Area (Sq.Ft.)" value={`${entry.data.totalHomeArea || 0} sq ft`} />
+              <CopyableField label="Total Work Area (Sq.Ft.)" value={`${entry.data.workArea || 0} sq ft`} />
             </div>
             <Separator />
-            <h4 className="font-medium text-sm text-muted-foreground">Expenses</h4>
+            <h5 className="font-medium text-sm text-muted-foreground">Expenses</h5>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <CopyableField label="Rent Expense" value={formatCurrency(formData.workFromHome.rentExpense)} />
-              <CopyableField label="Mortgage Expense" value={formatCurrency(formData.workFromHome.mortgageInterest)} />
-              <CopyableField label="Wifi Expense" value={formatCurrency(formData.workFromHome.internetExpense)} />
-              <CopyableField label="Electricity Expense" value={formatCurrency(formData.workFromHome.utilities)} />
-              <CopyableField label="Water Expense" value={formatCurrency(formData.workFromHome.waterExpense || 0)} />
-              <CopyableField label="Heat Expense" value={formatCurrency(formData.workFromHome.heatExpense || 0)} />
-              <CopyableField label="Total Insurance Expense" value={formatCurrency(formData.workFromHome.homeInsurance)} />
+              <CopyableField label="Rent Expense" value={formatCurrency(entry.data.rentExpense)} />
+              <CopyableField label="Mortgage Expense" value={formatCurrency(entry.data.mortgageInterest)} />
+              <CopyableField label="Wifi Expense" value={formatCurrency(entry.data.internetExpense)} />
+              <CopyableField label="Electricity Expense" value={formatCurrency(entry.data.utilities)} />
+              <CopyableField label="Water Expense" value={formatCurrency(entry.data.waterExpense || 0)} />
+              <CopyableField label="Heat Expense" value={formatCurrency(entry.data.heatExpense || 0)} />
+              <CopyableField label="Total Insurance Expense" value={formatCurrency(entry.data.homeInsurance)} />
             </div>
-            <div className="mt-4 p-3 rounded-lg bg-primary/10 border border-primary/20">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Claimable Amount</span>
-                <span className="text-lg font-bold text-primary">{formatCurrency(
-                  formData.workFromHome.claimableAmount || 
-                  ((formData.workFromHome.rentExpense + formData.workFromHome.mortgageInterest + 
-                    formData.workFromHome.internetExpense + formData.workFromHome.utilities + 
-                    (formData.workFromHome.waterExpense || 0) + (formData.workFromHome.heatExpense || 0) + 
-                    formData.workFromHome.homeInsurance) * 
-                   (formData.workFromHome.workArea / (formData.workFromHome.totalHomeArea || 1)))
-                )}</span>
-              </div>
-            </div>
-            <QuestionDocuments
-              sectionKey="WORK_FROM_HOME"
-              sectionTitle="Work From Home Documents"
-              documents={documents}
-              requiredDocuments={['T2200 Form']}
-              onApprove={onApproveDoc}
-              onRequestReupload={onRequestReupload}
-              onRequestMissing={onRequestMissing}
-              onView={onViewDoc}
-              canEdit={canEdit}
-            />
           </div>
-        )}
+        ))}
+        <QuestionDocuments
+          sectionKey="WORK_FROM_HOME"
+          sectionTitle="Work From Home Documents"
+          documents={documents}
+          requiredDocuments={['T2200 Form']}
+          onApprove={onApproveDoc}
+          onRequestReupload={onRequestReupload}
+          onRequestMissing={onRequestMissing}
+          onView={onViewDoc}
+          canEdit={canEdit}
+        />
       </T1CRASection>
 
       {/* Q10: Student (T2202A) */}
@@ -1232,17 +1413,28 @@ export function T1CRAReadyForm({
       <T1CRASection
         title="Q13: First-Time Filer"
         icon={<Plane className="h-5 w-5 text-primary" />}
-        applicable={!!formData.firstTimeFiler}
-        sectionData={formData.firstTimeFiler as unknown as Record<string, unknown>}
+        applicable={!!formData.isFirstTimeFiler}
+        sectionData={{ isFirstTimeFiler: formData.isFirstTimeFiler } as Record<string, unknown>}
       >
-        {formData.firstTimeFiler && (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <CopyableField label="Date of Landing (Individual)" value={formatDate(formData.firstTimeFiler.dateOfLanding)} />
-            <CopyableField label="Income Outside Canada (CAD)" value={formatCurrency(formData.firstTimeFiler.incomeOutsideCanada)} />
-            <CopyableField label="Back Home Income 2024 (in CAD)" value={formatCurrency(formData.firstTimeFiler.backHomeIncome2024)} />
-            <CopyableField label="Back Home Income 2023 (in CAD)" value={formatCurrency(formData.firstTimeFiler.backHomeIncome2023)} />
+        {[
+          formData.firstTimeFilerForIndividual && formData.firstTimeFilerIndividual
+            ? { label: 'Individual First Time Filer', data: formData.firstTimeFilerIndividual }
+            : null,
+          formData.firstTimeFilerForSpouse && formData.firstTimeFilerSpouse
+            ? { label: 'Spouse First Time Filer', data: formData.firstTimeFilerSpouse }
+            : null,
+        ].filter(Boolean).map((entry: any, entryIdx) => (
+          <div key={entryIdx} className="mb-6">
+            {entryIdx > 0 && <Separator className="mb-4" />}
+            <h4 className="font-semibold text-base mb-3">{entry.label}</h4>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <CopyableField label="Date of Landing" value={formatDate(entry.data.dateOfLanding)} />
+              <CopyableField label="Income Outside Canada (CAD)" value={formatCurrency(entry.data.incomeOutsideCanada)} />
+              <CopyableField label="Back Home Income 2024 (CAD)" value={formatCurrency(entry.data.backHomeIncome2024)} />
+              <CopyableField label="Back Home Income 2023 (CAD)" value={formatCurrency(entry.data.backHomeIncome2023)} />
+            </div>
           </div>
-        )}
+        ))}
       </T1CRASection>
 
       {/* Q14: Other Income (No T-Slips) */}
@@ -1344,12 +1536,12 @@ export function T1CRAReadyForm({
       >
         {formData.rentPropertyTax && (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <CopyableField label="Rent or Property Tax" value={formData.rentPropertyTax.rentOrPropertyTax || (formData.rentPropertyTax.rentOrOwn === 'rent' ? 'Rent' : 'Property Tax')} />
+            <CopyableField label="Rent or Property Tax" value={formData.rentPropertyTax.rentOrPropertyTax || 'N/A'} />
             <div className="sm:col-span-2">
               <CopyableField label="Property Address" value={formData.rentPropertyTax.propertyAddress} />
             </div>
             <CopyableField label="Postal Code" value={formData.rentPropertyTax.postalCode || 'N/A'} />
-            <CopyableField label="No. Of Months Resides" value={formData.rentPropertyTax.numberOfMonthsResides?.toString() || 'N/A'} />
+            <CopyableField label="No. Of Months Resides" value={(formData.rentPropertyTax.monthsResides || formData.rentPropertyTax.numberOfMonthsResides)?.toString() || 'N/A'} />
             <CopyableField label="Amount Paid" value={formatCurrency(formData.rentPropertyTax.amountPaid || formData.rentPropertyTax.occupancyCost)} />
           </div>
         )}
