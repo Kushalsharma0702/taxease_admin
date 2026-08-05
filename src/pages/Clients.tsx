@@ -263,14 +263,14 @@ export default function Clients() {
     try {
       await api.deleteClient(selectedClient.id);
       setIsDeleteOpen(false);
-      toast({
-        title: 'Not Supported',
-        description: 'Delete filing is not available in the current backend.',
-        variant: 'destructive',
-      });
       setSelectedClient(null);
+      toast({
+        title: 'Client Deleted',
+        description: `${selectedClient.name} and all associated data have been removed.`,
+      });
+      await fetchClients();
     } catch (error: any) {
-      toast({ title: 'Error', description: error.message || 'Failed to delete', variant: 'destructive' });
+      toast({ title: 'Error', description: error.message || 'Failed to delete client', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
