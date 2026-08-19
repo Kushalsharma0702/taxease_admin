@@ -988,8 +988,8 @@ export default function ClientDetail() {
           )}
 
           {/* T1 CRA Ready Form Tab */}
-          <TabsContent value="cra-form" className="mt-6 animate-fade-in">
-            <T1CRAReadyForm 
+          <TabsContent value="questionnaire" className="mt-6 animate-fade-in">
+            <T1CRAReadyForm
               clientId={client.id} 
               filingYear={client.filingYear}
               t1FormData={t1FormData}
@@ -1003,13 +1003,13 @@ export default function ClientDetail() {
           </TabsContent>
 
           {/* T1 Questionnaire Tab - Redesigned with Inline Documents */}
-          <TabsContent value="questionnaire" className="mt-6 animate-fade-in">
+          <TabsContent value="cra-form" className="mt-6 animate-fade-in">
             {questionnaire ? (
               <div className="space-y-6">
                 {/* Header with Overall Stats */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <h3 className="text-lg font-semibold">T1 Tax Return Documents</h3>
+                    <h3 className="text-lg font-semibold">T1 Detailed Data (All Fields)</h3>
                     <p className="text-sm text-muted-foreground">
                       Completed on {questionnaire.completedAt ? formatDate(questionnaire.completedAt) : 'N/A'} • {questionnaire.questions.length} questions
                     </p>
