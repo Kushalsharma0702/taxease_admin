@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { T1SectionCard } from '@/components/client/T1SectionCard';
 import { T1CRAReadyForm } from '@/components/client/T1CRAReadyForm';
+import { RequestedDocsContext } from '@/components/client/QuestionDocuments';
 import { STATUS_LABELS, ClientStatus, PERMISSIONS, Note, Document as DocType, T1Question, DocumentStatus, TaxFile } from '@/types';
 import {
   User,
@@ -86,6 +87,8 @@ export default function ClientDetail() {
   const [t1FormData, setT1FormData] = useState<any>(null);
   const [isLoadingClient, setIsLoadingClient] = useState(true);
   const [documents, setDocuments] = useState<any[]>([]);
+  // Names of missing docs that have been requested from the client (persisted).
+  const [requestedDocNames, setRequestedDocNames] = useState<Set<string>>(new Set());
   const [payments, setPayments] = useState<any[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [questionnaire, setQuestionnaire] = useState<any>(null);
@@ -156,13 +159,15 @@ export default function ClientDetail() {
       setIsLoadingClient(true);
       try {
         // 1. Fetch client profile + all filings + documents + payments in parallel
-        const [filingData, directFilingsResp, directT1Data, docsResp, paymentsResp] = await Promise.all([
+        const [filingData, directFilingsResp, directT1Data, docsResp, paymentsResp, requestedResp] = await Promise.all([
           api.getFiling(id),
           api.request<any>(`/users/${id}/filings`).catch(() => ({ filings: [], total_filings: 0 })),
           api.getUserT1FormData(id).catch(() => null),
           api.getDocuments({ client_id: id }).catch(() => ({ documents: [], total: 0 })),
           api.getPayments({ client_id: id }).catch(() => []),
+          api.getRequestedDocs(id).catch(() => [] as string[]),
         ]);
+        setRequestedDocNames(new Set(requestedResp || []));
 
         // 2. If no T1 data returned, the URL param is a clients.id UUID which differs from
         //    the users.id UUID. Resolve via email: search users by the client's email and retry.
@@ -457,11 +462,17 @@ export default function ClientDetail() {
         doc_name: docName,
         filing_year: client.filingYear,
       } as any);
+      if (docName) {
+        setRequestedDocNames((prev) => new Set(prev).add(docName));
+      }
       toast({
         title: 'Request Sent',
         description: `A professional email was sent to ${client.email}${docName ? ` requesting "${docName}"` : ''}.`,
       });
     } catch {
+      if (docName) {
+        setRequestedDocNames((prev) => new Set(prev).add(docName));
+      }
       toast({ title: 'Request Sent', description: 'Document request sent.', });
     }
   };
@@ -509,6 +520,7 @@ export default function ClientDetail() {
   };
 
   return (
+    <RequestedDocsContext.Provider value={requestedDocNames}>
     <DashboardLayout
       title=""
       breadcrumbs={[
@@ -1523,5 +1535,6 @@ export default function ClientDetail() {
       </AlertDialog>
 
     </DashboardLayout>
+    </RequestedDocsContext.Provider>
   );
 }

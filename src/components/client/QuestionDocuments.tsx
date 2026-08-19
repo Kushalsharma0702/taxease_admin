@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useContext, createContext } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -26,6 +26,11 @@ import { Document as DocType, DocumentStatus } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { DOCUMENT_SECTION_KEYS, CATEGORY_TO_SECTION_KEY, DocumentSectionKey } from '@/lib/api/config';
 
+// Names of missing documents already requested from the client. Provided once
+// by ClientDetail so every section can show a "Requested" badge without prop
+// drilling through the many QuestionDocuments instances.
+export const RequestedDocsContext = createContext<Set<string>>(new Set());
+
 interface QuestionDocumentsProps {
   sectionKey: keyof typeof DOCUMENT_SECTION_KEYS;
   sectionTitle: string;
@@ -38,11 +43,15 @@ interface QuestionDocumentsProps {
   canEdit?: boolean;
 }
 
-const STATUS_CONFIG: Record<DocumentStatus, { label: string; className: string; icon: string }> = {
+const DEFAULT_STATUS_CONFIG = { label: 'Pending Review', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30', icon: '🟡' };
+
+const STATUS_CONFIG: Record<string, { label: string; className: string; icon: string }> = {
   approved: { label: 'Approved', className: 'bg-green-500/10 text-green-600 border-green-500/30', icon: '✅' },
   complete: { label: 'Pending Review', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30', icon: '🟡' },
+  uploaded: { label: 'Pending Review', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30', icon: '🟡' },
   pending: { label: 'Pending Review', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30', icon: '🟡' },
   missing: { label: 'Missing', className: 'bg-destructive/10 text-destructive border-destructive/30', icon: '🔴' },
+  rejected: { label: 'Rejected', className: 'bg-destructive/10 text-destructive border-destructive/30', icon: '🔴' },
   reupload_requested: { label: 'Re-upload Requested', className: 'bg-orange-500/10 text-orange-600 border-orange-500/30', icon: '🔁' },
 };
 
@@ -84,9 +93,12 @@ export function QuestionDocuments({
   const [reason, setReason] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Missing docs that have already been requested from the client.
+  const requestedDocNames = useContext(RequestedDocsContext);
+
   // Get documents for this section using multiple matching strategies
   const sectionKeyValue = DOCUMENT_SECTION_KEYS[sectionKey];
-  
+
   const sectionDocs = useMemo(() => {
     const keywords = SECTION_KEYWORDS[sectionKeyValue] || [];
     
@@ -198,7 +210,7 @@ export function QuestionDocuments({
         {/* Existing Documents */}
         {sectionDocs.map((doc) => {
           const status = doc.status || 'pending';
-          const config = STATUS_CONFIG[status];
+          const config = STATUS_CONFIG[status] || DEFAULT_STATUS_CONFIG;
 
           return (
             <div 
@@ -290,20 +302,38 @@ export function QuestionDocuments({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/30">
-                🔴 Missing
-              </Badge>
+              {requestedDocNames.has(reqDoc) ? (
+                <Badge variant="outline" className="text-xs bg-orange-500/10 text-orange-600 border-orange-500/30">
+                  🔁 Requested
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/30">
+                  🔴 Missing
+                </Badge>
+              )}
 
               {canEdit && onRequestMissing && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openRequestDialog(reqDoc)}
-                  className="h-8 text-xs"
-                >
-                  <Send className="h-3 w-3 mr-1" />
-                  Request
-                </Button>
+                requestedDocNames.has(reqDoc) ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled
+                    className="h-8 text-xs opacity-70"
+                  >
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Requested
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openRequestDialog(reqDoc)}
+                    className="h-8 text-xs"
+                  >
+                    <Send className="h-3 w-3 mr-1" />
+                    Request
+                  </Button>
+                )
               )}
             </div>
           </div>

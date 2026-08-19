@@ -712,6 +712,14 @@ class ApiService {
     });
   }
 
+  // Names of documents already requested from this client (persisted server-side).
+  async getRequestedDocs(clientId: string): Promise<string[]> {
+    const res = await this.request<{ requested?: string[] }>(
+      `/notifications/requested-docs?client_id=${encodeURIComponent(clientId)}`
+    );
+    return res?.requested || [];
+  }
+
   async getClientNotifications(clientId: string, unreadOnly = false) {
     const q = new URLSearchParams();
     q.append('client_id', clientId);
