@@ -15,18 +15,22 @@ interface DocumentPreviewModalProps {
   onClose: () => void;
 }
 
-const STATUS_CONFIG: Record<DocumentStatus, { label: string; className: string }> = {
+const DEFAULT_STATUS_CONFIG = { label: 'Pending Review', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' };
+
+const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   approved: { label: 'Approved', className: 'bg-green-500/10 text-green-600 border-green-500/30' },
   complete: { label: 'Pending Review', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' },
+  uploaded: { label: 'Pending Review', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' },
   pending: { label: 'Pending Review', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' },
   missing: { label: 'Missing', className: 'bg-destructive/10 text-destructive border-destructive/30' },
+  rejected: { label: 'Rejected', className: 'bg-destructive/10 text-destructive border-destructive/30' },
   reupload_requested: { label: 'Re-upload Requested', className: 'bg-orange-500/10 text-orange-600 border-orange-500/30' },
 };
 
 export function DocumentPreviewModal({ document, isOpen, onClose }: DocumentPreviewModalProps) {
   if (!document) return null;
 
-  const config = STATUS_CONFIG[document.status];
+  const config = STATUS_CONFIG[document.status] || DEFAULT_STATUS_CONFIG;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

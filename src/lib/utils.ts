@@ -18,12 +18,16 @@ export function formatCurrency(value: number | undefined | null): string {
  */
 export function formatDate(value: Date | string | undefined | null): string {
   if (!value) return 'N/A';
-  const date = typeof value === 'string' ? new Date(value) : value;
-  if (isNaN(date.getTime())) return 'N/A';
-  
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
+  if (typeof value === 'string') {
+    // Extract date parts directly from ISO string to avoid timezone conversion.
+    // new Date("YYYY-MM-DD") is parsed as UTC, causing off-by-one in negative offsets.
+    const m = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+    return 'N/A';
+  }
+  const day = String(value.getDate()).padStart(2, '0');
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const year = value.getFullYear();
   return `${day}-${month}-${year}`;
 }
 

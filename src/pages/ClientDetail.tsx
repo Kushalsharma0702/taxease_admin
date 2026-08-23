@@ -35,9 +35,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { T1SectionCard } from '@/components/client/T1SectionCard';
 import { T1CRAReadyForm } from '@/components/client/T1CRAReadyForm';
 import { RequestedDocsContext } from '@/components/client/QuestionDocuments';
+import { DocumentActionRow } from '@/components/client/DocumentActionRow';
 import { STATUS_LABELS, ClientStatus, PERMISSIONS, Note, Document as DocType, T1Question, DocumentStatus, TaxFile } from '@/types';
 import {
   User,
@@ -987,10 +987,10 @@ export default function ClientDetail() {
             </div>
           )}
 
-          {/* T1 CRA Ready Form Tab */}
-          <TabsContent value="questionnaire" className="mt-6 animate-fade-in">
+          {/* T1 CRA Ready Form Tab — Detailed Data */}
+          <TabsContent value="cra-form" className="mt-6 animate-fade-in">
             <T1CRAReadyForm
-              clientId={client.id} 
+              clientId={client.id}
               filingYear={client.filingYear}
               t1FormData={t1FormData}
               documents={documents}
@@ -1002,20 +1002,110 @@ export default function ClientDetail() {
             />
           </TabsContent>
 
-          {/* T1 Questionnaire Tab - Redesigned with Inline Documents */}
-          <TabsContent value="cra-form" className="mt-6 animate-fade-in">
-            {questionnaire ? (
-              <div className="space-y-6">
-                {/* Header with Overall Stats */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-lg font-semibold">T1 Detailed Data (All Fields)</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Completed on {questionnaire.completedAt ? formatDate(questionnaire.completedAt) : 'N/A'} • {questionnaire.questions.length} questions
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    {/* Quick Stats */}
+          {/* Documents Tab — only show T1 sections that have uploaded documents */}
+          <TabsContent value="questionnaire" className="mt-6 animate-fade-in">
+            {(() => {
+              const SECTION_KEYWORDS: Record<string, string[]> = {
+                employment_income: ['form 16', 'salary', 'employment', 'employer', 't4'],
+                investment_income: ['investment', 'fd', 'dividend', 'interest certificate', 'mutual fund statement', 't5'],
+                foreign_property: ['foreign', 'us income', 'dtaa', 'overseas'],
+                medical_expenses: ['medical', 'hospital', 'health', 'pharmacy', 'doctor', 'medicine', 'clinic'],
+                charitable_donations: ['donation', 'charity', 'ngo', 'trust'],
+                moving_expenses: ['moving', 'relocation', 'transport'],
+                self_employment: ['self-employment', 'freelance', 'consulting', 'invoice', 'business', 'gst'],
+                uber_income: ['uber', 'skip', 'doordash', 'lyft'],
+                rental_income: ['rent', 'rental', 'tenant', 'landlord'],
+                capital_gains: ['capital gain', 'stock', 'trading', 'property sale'],
+                work_from_home: ['work from home', 't2200', 'home office'],
+                tuition: ['tuition', 't2202', 'education', 'school', 'college', 'university'],
+                childcare: ['daycare', 'childcare', 'babysitter', 'child care'],
+                union_dues: ['union', 'dues'],
+                professional_dues: ['professional', 'license', 'certification', 'membership'],
+                disability_tax_credit: ['disability', 'dtc'],
+                first_time_filer: ['first time', 'landing'],
+                rrsp_contributions: ['rrsp', 'fhsa'],
+                rent_property_tax: ['property tax', 'rent receipt'],
+                t183_form: ['t183'],
+              };
+
+              const SECTION_TITLES: Record<string, string> = {
+                employment_income: 'Employment Income',
+                investment_income: 'Investment Income',
+                foreign_property: 'Q1: Foreign Property (> CAN$100,000)',
+                medical_expenses: 'Q2: Medical Expenses',
+                charitable_donations: 'Q3: Charitable Donations',
+                moving_expenses: 'Q4: Moving Expenses',
+                self_employment: 'Q5: Self-Employment',
+                uber_income: 'Q5: Uber / Ride-Share Income',
+                rental_income: 'Q5: Rental Income',
+                capital_gains: 'Q7/Q8: Capital Gains / Property Sale',
+                work_from_home: 'Q9: Work From Home (T2200)',
+                tuition: 'Q10: Tuition (T2202)',
+                childcare: 'Q12: Daycare Expenses',
+                union_dues: 'Q11: Union Dues',
+                professional_dues: 'Q15: Professional Dues',
+                disability_tax_credit: 'Q19: Disability Tax Credit',
+                first_time_filer: 'Q13: First-Time Filer',
+                rrsp_contributions: 'Q16: RRSP / FHSA',
+                rent_property_tax: 'Q18: Rent / Property Tax',
+                t183_form: 'T183 Form',
+              };
+
+              const SECTION_ORDER = [
+                'employment_income', 'investment_income', 'foreign_property',
+                'medical_expenses', 'charitable_donations', 'moving_expenses',
+                'self_employment', 'uber_income', 'rental_income', 'capital_gains',
+                'work_from_home', 'tuition', 'union_dues', 'childcare',
+                'first_time_filer', 'professional_dues', 'rrsp_contributions',
+                'rent_property_tax', 'disability_tax_credit', 't183_form',
+              ];
+
+              const classifyDoc = (doc: any): string => {
+                if (doc.sectionKey && SECTION_TITLES[doc.sectionKey]) return doc.sectionKey;
+                const nameLower = (doc.name || '').toLowerCase();
+                const typeLower = (doc.document_type || doc.type || '').toLowerCase();
+                for (const [sk, kws] of Object.entries(SECTION_KEYWORDS)) {
+                  if (kws.some(kw => nameLower.includes(kw) || typeLower.includes(kw))) return sk;
+                }
+                return '__other__';
+              };
+
+              const grouped = new Map<string, any[]>();
+              for (const doc of documents) {
+                const sk = classifyDoc(doc);
+                if (!grouped.has(sk)) grouped.set(sk, []);
+                grouped.get(sk)!.push(doc);
+              }
+
+              const ordered: Array<[string, any[]]> = [];
+              for (const sk of SECTION_ORDER) {
+                if (grouped.has(sk)) ordered.push([sk, grouped.get(sk)!]);
+              }
+              if (grouped.has('__other__')) ordered.push(['__other__', grouped.get('__other__')!]);
+
+              if (ordered.length === 0) {
+                return (
+                  <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-14 text-center">
+                      <FileText className="h-12 w-12 text-muted-foreground/40 mb-3" />
+                      <p className="text-lg font-medium">No Documents Uploaded</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Client documents will appear here grouped by their T1 question once uploaded.
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              return (
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-semibold">Client Documents</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {documents.length} document{documents.length === 1 ? '' : 's'} across {ordered.length} section{ordered.length === 1 ? '' : 's'}
+                      </p>
+                    </div>
                     <div className="flex items-center gap-3 text-sm">
                       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-green-600">
                         <CheckCircle2 className="h-3.5 w-3.5" />
@@ -1025,67 +1115,47 @@ export default function ClientDetail() {
                         <Clock className="h-3.5 w-3.5" />
                         <span className="font-medium">{overallStats.pending}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-destructive/10 text-destructive">
-                        <FileMinus className="h-3.5 w-3.5" />
-                        <span className="font-medium">{overallStats.missing}</span>
-                      </div>
-                      {overallStats.reuploadRequested > 0 && (
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/10 text-orange-600">
-                          <RotateCcw className="h-3.5 w-3.5" />
-                          <span className="font-medium">{overallStats.reuploadRequested}</span>
+                      {overallStats.missing > 0 && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-destructive/10 text-destructive">
+                          <FileMinus className="h-3.5 w-3.5" />
+                          <span className="font-medium">{overallStats.missing}</span>
                         </div>
                       )}
                     </div>
                   </div>
-                </div>
 
-                {/* Legend */}
-                <div className="flex flex-wrap items-center gap-4 p-3 rounded-lg bg-muted/30 border text-xs">
-                  <span className="font-medium text-muted-foreground">Status Legend:</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-green-600">✅</span>
-                    <span>Approved</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-yellow-600">🟡</span>
-                    <span>Pending Review</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-destructive">🔴</span>
-                    <span>Missing</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-orange-600">🔁</span>
-                    <span>Re-upload Requested</span>
-                  </div>
-                </div>
-
-                {/* Section Cards - All Expanded by Default */}
-                <div className="space-y-4">
-                  {Object.entries(questionsByCategory).map(([category, questions]) => (
-                    <T1SectionCard
-                      key={category}
-                      category={category}
-                      questions={questions}
-                      documents={documents}
-                      onApproveDoc={handleApproveDocument}
-                      onRequestReupload={handleRequestReupload}
-                      onRequestMissing={handleRequestDocument}
-                      onViewDoc={handleViewDocument}
-                      canEdit={hasPermission(PERMISSIONS.REQUEST_DOCUMENTS)}
-                    />
+                  {ordered.map(([sectionKey, docs]) => (
+                    <Card key={sectionKey}>
+                      <CardContent className="p-5">
+                        <div className="flex items-center gap-2 mb-4">
+                          <FileText className="h-4 w-4 text-primary" />
+                          <h3 className="font-semibold">
+                            {sectionKey === '__other__' ? 'Other Documents' : SECTION_TITLES[sectionKey]}
+                          </h3>
+                          <Badge variant="outline" className="text-xs ml-auto">
+                            {docs.length} uploaded
+                          </Badge>
+                        </div>
+                        <div className="space-y-2">
+                          {docs.map((doc: any) => (
+                            <DocumentActionRow
+                              key={doc.id}
+                              document={doc}
+                              requiredDocName={doc.name}
+                              onApprove={handleApproveDocument}
+                              onRequestReupload={handleRequestReupload}
+                              onRequestMissing={handleRequestDocument}
+                              onView={handleViewDocument}
+                              canEdit={hasPermission(PERMISSIONS.REQUEST_DOCUMENTS)}
+                            />
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
                   ))}
                 </div>
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
-                  <p className="text-lg font-medium">No Questionnaire Found</p>
-                  <p className="text-sm text-muted-foreground mt-1">The client has not completed the T1 questionnaire yet.</p>
-                </CardContent>
-              </Card>
-            )}
+              );
+            })()}
           </TabsContent>
 
           {/* Payments Tab */}

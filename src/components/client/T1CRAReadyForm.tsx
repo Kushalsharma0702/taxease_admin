@@ -36,10 +36,15 @@ import {
   Calculator,
 } from 'lucide-react';
 
+// Treat "true", 1, "1", and boolean true all as truthy — guards against DB
+// returning strings instead of booleans in edge cases.
+const parseBool = (v: any): boolean =>
+  v === true || v === 'true' || v === 1 || v === '1';
+
 // Convert API T1 form data to the format expected by the component
 function convertApiDataToFormData(t1Data: any) {
   if (!t1Data || !t1Data.answers) return null;
-  
+
   // Convert flat answers array to nested object using dot notation
   const answersMap: Record<string, any> = {};
   
@@ -100,21 +105,34 @@ function convertApiDataToFormData(t1Data: any) {
   
   // Extract personalInfo with safe defaults
   const personalInfo = answersMap.personalInfo || {};
-  
-  // Parse address - check both address and currentAddress
-  let addressObj = { street: '', city: '', province: '', postalCode: '' };
-  const addressSource = personalInfo.currentAddress || personalInfo.address;
-  
-  if (typeof addressSource === 'string') {
-    // Try to parse if it's a string (like "201310" or a full address)
-    addressObj.postalCode = addressSource;
-  } else if (addressSource && typeof addressSource === 'object') {
+
+  // Parse address — prefer structured fields, fall back to currentAddress object, then address string
+  let addressObj = { street: '', aptSuite: '', city: '', province: '', postalCode: '', country: '' };
+  if (personalInfo.street) {
+    // New structured format sent by the Flutter app
     addressObj = {
-      street: addressSource.street || '',
-      city: addressSource.city || '',
-      province: addressSource.province || '',
-      postalCode: addressSource.postalCode || ''
+      street: personalInfo.street || '',
+      aptSuite: personalInfo.aptSuite || '',
+      city: personalInfo.city || '',
+      province: personalInfo.province || '',
+      postalCode: personalInfo.postalCode || '',
+      country: personalInfo.country || '',
     };
+  } else {
+    const addressSource = personalInfo.currentAddress || personalInfo.address;
+    if (addressSource && typeof addressSource === 'object') {
+      addressObj = {
+        street: addressSource.street || '',
+        aptSuite: addressSource.aptSuite || '',
+        city: addressSource.city || '',
+        province: addressSource.province || '',
+        postalCode: addressSource.postalCode || '',
+        country: addressSource.country || '',
+      };
+    } else if (typeof addressSource === 'string' && addressSource) {
+      // Legacy single string — put in street for display
+      addressObj.street = addressSource;
+    }
   }
   
   // Helper function to safely get value with fallback
@@ -259,14 +277,15 @@ function convertApiDataToFormData(t1Data: any) {
   // Convert medical expenses array
   const medicalExpenses = answersMap.medicalExpenses ? convertArray(answersMap.medicalExpenses, {
     description: 'description',
-    amount: 'amountPaid'
+    amount: 'amountPaid',
+    amountPaidFromPocket: 'amountPaid',
   }).map(item => ({
     ...item,
     amountPaid: parseFloat(item.amountPaid) || 0,
     paymentDate: item.paymentDate || new Date().toISOString().split('T')[0],
     patientName: item.patientName || `${personalInfo.firstName} ${personalInfo.lastName}`,
     paymentMadeTo: item.paymentMadeTo || item.description,
-    insuranceCovered: item.insuranceCovered || 'no'
+    insuranceCovered: parseFloat(item.insuranceCovered) || 0
   })) : [];
   
   // Convert charitable donations array
@@ -292,12 +311,12 @@ function convertApiDataToFormData(t1Data: any) {
   
   // Convert professional dues array
   const professionalDues = answersMap.professionalDues ? convertArray(answersMap.professionalDues, {
-    organization: 'organization',
     amount: 'amountPaid'
   }).map(item => ({
     ...item,
     amountPaid: parseFloat(item.amountPaid) || 0,
-    name: item.name || item.organization,
+    memberName: item.memberName || item.name || '',
+    organizationName: item.organizationName || item.organization || '',
     receiptNumber: item.receiptNumber || ''
   })) : [];
   
@@ -313,12 +332,10 @@ function convertApiDataToFormData(t1Data: any) {
   
   // Convert children's activities array
   const childrenCredits = answersMap.childArtSportActivities ? convertArray(answersMap.childArtSportActivities, {
-    childName: 'childName',
-    activityType: 'description',
     amount: 'amountPaid'
   }).map(item => ({
     ...item,
-    instituteName: item.childName || 'N/A',
+    instituteName: item.instituteName || item.childName || 'N/A',
     description: item.description || item.activityType || 'N/A',
     programDescription: item.description || item.activityType || 'N/A',
     amountPaid: parseFloat(item.amountPaid) || 0
@@ -327,15 +344,16 @@ function convertApiDataToFormData(t1Data: any) {
   // Convert foreign properties array
   const foreignProperties = answersMap.foreignProperties ? convertArray(answersMap.foreignProperties).map(item => ({
     ...item,
-    costAmount: parseFloat(item.costAmount) || 0,
-    currentValue: parseFloat(item.currentValue) || 0,
-    incomeGenerated: parseFloat(item.incomeGenerated) || 0
+    grossIncome: parseFloat(item.grossIncome) || 0,
+    gainLoss: parseFloat(item.gainLossOnSale ?? item.gainLoss) || 0,
+    maxCostDuringYear: parseFloat(item.maxCostDuringYear) || 0,
+    costAmountAtYearEnd: parseFloat(item.costAmountYearEnd ?? item.costAmountAtYearEnd) || 0,
   })) : [];
   
   // Convert work from home data
   const workFromHomeData = answersMap.workFromHome ? {
     totalHomeArea: parseFloat(answersMap.workFromHome.totalHouseArea || answersMap.workFromHome.totalHomeArea) || 0,
-    workArea: parseFloat(answersMap.workFromHome.workArea) || 0,
+    workArea: parseFloat(answersMap.workFromHome.totalWorkArea || answersMap.workFromHome.workArea) || 0,
     rentExpense: parseFloat(answersMap.workFromHome.rentExpense) || 0,
     mortgageInterest: parseFloat(answersMap.workFromHome.mortgageExpense || answersMap.workFromHome.mortgageInterest) || 0,
     internetExpense: parseFloat(answersMap.workFromHome.wifiExpense || answersMap.workFromHome.internetExpense) || 0,
@@ -392,44 +410,96 @@ function convertApiDataToFormData(t1Data: any) {
     },
     employmentIncome: Array.isArray(answersMap.employmentIncome) ? answersMap.employmentIncome : [],
     investmentIncome: Array.isArray(answersMap.investmentIncome) ? answersMap.investmentIncome : [],
-    selfEmployment: answersMap.isSelfEmployed === true ? (answersMap.selfEmployment || {}) : null,
+    selfEmployment: (parseBool(answersMap.isSelfEmployed) || !!answersMap.selfEmployment) ? (() => {
+      const se = answersMap.selfEmployment || {};
+      // Normalize businessTypes array → individual boolean flags
+      if (Array.isArray(se.businessTypes)) {
+        se.hasUberSkipDoorDash = se.hasUberSkipDoorDash ?? se.businessTypes.includes('uber');
+        se.hasGeneralBusiness  = se.hasGeneralBusiness  ?? se.businessTypes.includes('general');
+        se.hasRentalIncome     = se.hasRentalIncome     ?? se.businessTypes.includes('rental');
+      }
+      // uberBusiness → uberIncome
+      if (se.uberBusiness && !se.uberIncome) se.uberIncome = se.uberBusiness;
+      // rentalIncome single object → array
+      if (se.rentalIncome && !Array.isArray(se.rentalIncome)) se.rentalIncome = [se.rentalIncome];
+      return se;
+    })() : null,
     rentalIncome: Array.isArray(answersMap.rentalIncome) ? answersMap.rentalIncome : [],
     rrspContributions: rrspContributions,
     medicalExpenses: medicalExpenses,
     charitableDonations: charitableDonations,
-    hasMovingExpenses: answersMap.hasMovingExpenses === true,
-    movingExpenseForIndividual: answersMap.movingExpenseForIndividual === true,
-    movingExpenseForSpouse: answersMap.movingExpenseForSpouse === true,
-    movingExpenses: answersMap.hasMovingExpenses === true ? (answersMap.movingExpenses || null) : null,
-    movingExpensesSpouse: answersMap.movingExpenseForSpouse === true ? (answersMap.movingExpensesSpouse || null) : null,
+    // Show moving expenses if the boolean flag is set OR if any individual/spouse data object exists
+    hasMovingExpenses: parseBool(answersMap.hasMovingExpenses) || !!answersMap.movingExpenseIndividual || !!answersMap.movingExpenseSpouse,
+    movingExpenseForIndividual: parseBool(answersMap.movingExpenseForIndividual) || !!answersMap.movingExpenseIndividual,
+    movingExpenseForSpouse: parseBool(answersMap.movingExpenseForSpouse) || !!answersMap.movingExpenseSpouse,
+    movingExpenses: (parseBool(answersMap.hasMovingExpenses) || !!answersMap.movingExpenseIndividual) ? (answersMap.movingExpenses || null) : null,
+    movingExpensesSpouse: (parseBool(answersMap.movingExpenseForSpouse) || !!answersMap.movingExpenseSpouse) ? (answersMap.movingExpensesSpouse || null) : null,
     childcare: daycareExpenses,
-    unionDues: answersMap.isUnionMember === true ? (Array.isArray(answersMap.unionDues) ? answersMap.unionDues : []) : [],
+    // Show union dues if flag is set OR if the array has entries
+    unionDues: (parseBool(answersMap.isUnionMember) || (Array.isArray(answersMap.unionDues) && answersMap.unionDues.length > 0))
+      ? (Array.isArray(answersMap.unionDues)
+          ? answersMap.unionDues.map((u: any) => ({ ...u, amountPaid: parseFloat(u.amountPaid ?? u.amount) || 0 }))
+          : [])
+      : [],
     professionalDues: professionalDues,
-    tuition: answersMap.wasStudentLastYear === true ? (Array.isArray(answersMap.tuition) ? answersMap.tuition : []) : [],
+    tuition: parseBool(answersMap.wasStudentLastYear) ? (Array.isArray(answersMap.tuition) ? answersMap.tuition : []) : [],
     childrenCredits: childrenCredits,
     foreignProperty: foreignProperties,
-    isFirstHomeBuyer: answersMap.isFirstHomeBuyer === true,
-    propertySaleLongTerm: answersMap.soldPropertyLongTerm === true ? (answersMap.propertySaleLongTerm || null) : null,
-    propertySaleShortTerm: answersMap.soldPropertyShortTerm === true ? (answersMap.propertySaleShortTerm || null) : null,
-    hasWorkFromHomeExpense: answersMap.hasWorkFromHomeExpense === true,
-    workFromHomeForIndividual: answersMap.workFromHomeForIndividual === true,
-    workFromHomeForSpouse: answersMap.workFromHomeForSpouse === true,
+    isFirstHomeBuyer: parseBool(answersMap.isFirstHomeBuyer),
+    // Show property sale data if the flag is set OR if the data object exists
+    propertySaleLongTerm: (parseBool(answersMap.soldPropertyLongTerm) || !!answersMap.propertySaleLongTerm) ? (answersMap.propertySaleLongTerm || null) : null,
+    propertySaleShortTerm: (parseBool(answersMap.soldPropertyShortTerm) || !!answersMap.propertySaleShortTerm) ? (answersMap.propertySaleShortTerm || null) : null,
+    // Show WFH if flag is set OR if any individual/spouse data object exists
+    hasWorkFromHomeExpense: parseBool(answersMap.hasWorkFromHomeExpense) || !!answersMap.workFromHomeIndividual || !!answersMap.workFromHomeSpouse || !!answersMap.workFromHome,
+    workFromHomeForIndividual: parseBool(answersMap.workFromHomeForIndividual) || !!answersMap.workFromHomeIndividual,
+    workFromHomeForSpouse: parseBool(answersMap.workFromHomeForSpouse) || !!answersMap.workFromHomeSpouse,
     workFromHome: workFromHomeData,
     wfhIndividual: answersMap.wfhIndividual || null,
     wfhSpouse: answersMap.wfhSpouse || null,
-    isFirstTimeFiler: answersMap.isFirstTimeFiler === true,
-    firstTimeFilerForIndividual: answersMap.firstTimeFilerForIndividual === true,
-    firstTimeFilerForSpouse: answersMap.firstTimeFilerForSpouse === true,
+    isStudent: parseBool(answersMap.wasStudentLastYear),
+    hasRrspFhsaInvestment: parseBool(answersMap.hasRrspFhsaInvestment),
+    isProvinceFiler: parseBool(answersMap.isProvinceFiler) || (Array.isArray(answersMap.provinceFilerEntries) && answersMap.provinceFilerEntries.length > 0),
+    provinceFilerEntries: Array.isArray(answersMap.provinceFilerEntries)
+      ? answersMap.provinceFilerEntries.map((e: any) => ({
+          ...e,
+          amountPaid: e.amountPaid ?? e.rentOrPropertyTaxAmount,
+        }))
+      : [],
+    // Show first-time filer if flag is set OR if any individual/spouse data object exists
+    isFirstTimeFiler: parseBool(answersMap.isFirstTimeFiler) || !!answersMap.firstTimeFilerIndividual || !!answersMap.firstTimeFilerSpouse,
+    firstTimeFilerForIndividual: parseBool(answersMap.firstTimeFilerForIndividual) || !!answersMap.firstTimeFilerIndividual,
+    firstTimeFilerForSpouse: parseBool(answersMap.firstTimeFilerForSpouse) || !!answersMap.firstTimeFilerSpouse,
     firstTimeFilerIndividual: answersMap.firstTimeFilerIndividual || null,
     firstTimeFilerSpouse: answersMap.firstTimeFilerSpouse || null,
-    disabilities: answersMap.hasDisabilityTaxCredit === true ? (answersMap.disabilities || {}) : null,
-    disabilityTaxCredit: answersMap.hasDisabilityTaxCredit === true
-      ? (Array.isArray(answersMap.disabilityClaimMembers) ? answersMap.disabilityClaimMembers : [])
-      : [],
+    disabilities: answersMap.hasDisabilityTaxCredit ? (answersMap.disabilities || {}) : null,
+    disabilityTaxCredit: (() => {
+      if (!answersMap.hasDisabilityTaxCredit && !Array.isArray(answersMap.disabilityClaimMembers)) return [];
+      // Prefer explicit disabilityClaimMembers array if present
+      if (Array.isArray(answersMap.disabilityClaimMembers) && answersMap.disabilityClaimMembers.length > 0) {
+        return answersMap.disabilityClaimMembers;
+      }
+      // Flutter remaps members to hasDisabilityTaxCredit.* (snake_case), rebuild one member object
+      const dtc = typeof answersMap.hasDisabilityTaxCredit === 'object' ? answersMap.hasDisabilityTaxCredit : {};
+      if (dtc.first_name || dtc.last_name || dtc.relation) {
+        return [{
+          firstName: dtc.first_name || '',
+          lastName: dtc.last_name || '',
+          relation: dtc.relation || '',
+          approvedYear: dtc.approved_year || '',
+          fromYear: dtc.from_year || dtc.fromYear || '',
+          toYear: dtc.to_year || dtc.toYear || '',
+        }];
+      }
+      return [];
+    })(),
     homeAccessibility: answersMap.homeAccessibility || null,
     politicalContributions: Array.isArray(answersMap.politicalContributions) ? answersMap.politicalContributions : [],
     rentPropertyTax: Array.isArray(answersMap.provinceFilerEntries) && answersMap.provinceFilerEntries.length > 0
-      ? answersMap.provinceFilerEntries[0]
+      ? {
+          ...answersMap.provinceFilerEntries[0],
+          amountPaid: answersMap.provinceFilerEntries[0].amountPaid
+            ?? answersMap.provinceFilerEntries[0].rentOrPropertyTaxAmount,
+        }
       : (answersMap.provinceRent ? {
           rentOrPropertyTax: answersMap.provinceRent.type === 'rent' ? 'Rent' : 'Property Tax',
           propertyAddress: personalInfo.currentAddress
@@ -438,10 +508,13 @@ function convertApiDataToFormData(t1Data: any) {
           monthsResides: 12,
           amountPaid: parseFloat(answersMap.provinceRent.amount) || 0,
         } : null),
-    deceasedReturn: answersMap.isFilingForDeceased === true ? (answersMap.deceasedReturnInfo || null) : null,
-    otherIncome: answersMap.hasOtherIncome === true && answersMap.otherIncomeDescription
-      ? [{ description: answersMap.otherIncomeDescription, amount: 0 }]
-      : [],
+    deceasedReturn: (parseBool(answersMap.isFilingForDeceased) || !!answersMap.deceasedReturnInfo) ? (answersMap.deceasedReturnInfo || null) : null,
+    // Other income: use array if present, otherwise build from description string
+    otherIncome: Array.isArray(answersMap.otherIncome) && answersMap.otherIncome.length > 0
+      ? answersMap.otherIncome.map((o: any) => ({ description: o.description || o.source || '', amount: parseFloat(o.amount) || 0 }))
+      : (parseBool(answersMap.hasOtherIncome) && answersMap.otherIncomeDescription
+          ? [{ description: answersMap.otherIncomeDescription, amount: 0 }]
+          : []),
   };
 }
 
@@ -634,12 +707,16 @@ export function T1CRAReadyForm({
           <CopyableField label="Last Name" value={formData.personalInfo.lastName} />
           <CopyableField label="SIN (Individual)" value={formData.personalInfo.sin} />
           <CopyableField label="Date of Birth" value={formatDate(formData.personalInfo.dateOfBirth)} />
-          <div className="sm:col-span-2">
-            <CopyableField
-              label="Current Address with Postal Code"
-              value={`${formData.personalInfo.currentAddress.street}, ${formData.personalInfo.currentAddress.city}, ${formData.personalInfo.currentAddress.province} ${formData.personalInfo.currentAddress.postalCode}`}
-            />
-          </div>
+          <CopyableField label="Street Address" value={formData.personalInfo.currentAddress.street} />
+          {formData.personalInfo.currentAddress.aptSuite && (
+            <CopyableField label="Apt / Suite / Unit" value={formData.personalInfo.currentAddress.aptSuite} />
+          )}
+          <CopyableField label="City" value={formData.personalInfo.currentAddress.city} />
+          <CopyableField label="Province" value={formData.personalInfo.currentAddress.province} />
+          <CopyableField label="Postal Code" value={formData.personalInfo.currentAddress.postalCode} />
+          {formData.personalInfo.currentAddress.country && (
+            <CopyableField label="Country" value={formData.personalInfo.currentAddress.country} />
+          )}
           <CopyableField label="Phone Number" value={formData.personalInfo.phone} />
           <CopyableField label="Email" value={formData.personalInfo.email} />
           <CopyableField label="Canadian Citizen" value={formData.personalInfo.isCanadianCitizen ? 'Yes' : 'No'} />
@@ -806,7 +883,7 @@ export function T1CRAReadyForm({
       <T1CRASection
         title="Q4: Moving Expenses (Province Change)"
         icon={<Truck className="h-5 w-5 text-primary" />}
-        applicable={!!formData.hasMovingExpenses}
+        applicable={!!formData.hasMovingExpenses || !!formData.movingExpenseForIndividual || !!formData.movingExpenseForSpouse}
         sectionData={formData.movingExpenses as unknown as Record<string, unknown>}
       >
         {[
@@ -923,6 +1000,12 @@ export function T1CRAReadyForm({
                     <CopyableField label="Business HST Number" value={formData.selfEmployment.uberIncome.businessHstNumber || 'N/A'} />
                     <CopyableField label="HST Access Code" value={formData.selfEmployment.uberIncome.hstAccessCode || 'N/A'} />
                     <CopyableField label="HST Filing Period" value={formData.selfEmployment.uberIncome.hstFillingPeriod || 'N/A'} />
+                    {formData.selfEmployment.uberIncome.businessNumberVehicleRegistration && (
+                      <CopyableField label="Business # / Vehicle Registration" value={formData.selfEmployment.uberIncome.businessNumberVehicleRegistration} />
+                    )}
+                    {(formData.selfEmployment.uberIncome.income > 0) && (
+                      <CopyableField label="Gross Income" value={formatCurrency(formData.selfEmployment.uberIncome.income)} />
+                    )}
                   </div>
                 </div>
 
@@ -954,12 +1037,14 @@ export function T1CRAReadyForm({
                   </div>
                 </div>
 
-                <div>
-                  <h5 className="font-medium text-sm text-muted-foreground mb-3">Summary</h5>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <CopyableField label="Net Income" value={formatCurrency(formData.selfEmployment.uberIncome.netIncome)} className="font-semibold" />
+                {formData.selfEmployment.uberIncome.netIncome > 0 && (
+                  <div>
+                    <h5 className="font-medium text-sm text-muted-foreground mb-3">Summary</h5>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <CopyableField label="Net Income" value={formatCurrency(formData.selfEmployment.uberIncome.netIncome)} className="font-semibold" />
+                    </div>
                   </div>
-                </div>
+                )}
               </>
             )}
 
@@ -975,7 +1060,7 @@ export function T1CRAReadyForm({
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     <CopyableField label="Sales / Commissions / Fees" value={formatCurrency(formData.selfEmployment.generalBusiness.salesCommissionsFees)} />
                     <CopyableField label="Minus HST Collected" value={formatCurrency(formData.selfEmployment.generalBusiness.minusHstCollected)} />
-                    <CopyableField label="Gross Income" value={formatCurrency(formData.selfEmployment.generalBusiness.grossIncome)} className="font-medium" />
+                    <CopyableField label="Net Income" value={formatCurrency(formData.selfEmployment.generalBusiness.grossIncome)} className="font-medium" />
                     <CopyableField label="Opening Inventory" value={formatCurrency(formData.selfEmployment.generalBusiness.openingInventory)} />
                     <CopyableField label="Purchases During Year" value={formatCurrency(formData.selfEmployment.generalBusiness.purchasesDuringYear)} />
                     <CopyableField label="Subcontracts" value={formatCurrency(formData.selfEmployment.generalBusiness.subcontracts)} />
@@ -1075,8 +1160,6 @@ export function T1CRAReadyForm({
                           <div className="sm:col-span-3">
                             <CopyableField label="Property Address" value={rent.propertyAddress} />
                           </div>
-                          <CopyableField label="Property Type" value={rent.propertyType} />
-                          <CopyableField label="Ownership %" value={`${rent.ownershipPercentage}%`} />
                           <CopyableField label="Number of Units" value={rent.numberOfUnits?.toString() || 'N/A'} />
                           <CopyableField label="Personal Use Portion" value={rent.personalUsePortion || 'N/A'} />
                           <CopyableField label="Gov't Income (Rental)" value={rent.anyGovtIncomeRelatingToRental || 'N/A'} />
@@ -1101,16 +1184,16 @@ export function T1CRAReadyForm({
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                           <CopyableField label="Gross Rental Income" value={formatCurrency(rent.grossRentalIncome)} className="font-medium" />
                           <CopyableField label="Property Taxes" value={formatCurrency(rent.propertyTaxes)} />
-                          <CopyableField label="Insurance" value={formatCurrency(rent.insurance)} />
+                          <CopyableField label="Insurance" value={formatCurrency(rent.insurance ?? rent.houseInsurance)} />
                           <CopyableField label="Mortgage Interest" value={formatCurrency(rent.mortgageInterest)} />
-                          <CopyableField label="Repairs & Maintenance" value={formatCurrency(rent.repairsAndMaintenance)} />
+                          <CopyableField label="Repairs & Maintenance" value={formatCurrency(rent.repairsAndMaintenance ?? rent.repairAndMaintenance)} />
                           <CopyableField label="Utilities" value={formatCurrency(rent.utilities)} />
-                          <CopyableField label="Management Fees" value={formatCurrency(rent.managementFees)} />
+                          <CopyableField label="Management Fees" value={formatCurrency(rent.managementFees ?? rent.managementAdminFees)} />
                           <CopyableField label="Cleaning Expense" value={formatCurrency(rent.cleaningExpense)} />
                           <CopyableField label="Motor Vehicle Expenses" value={formatCurrency(rent.motorVehicleExpenses)} />
                           <CopyableField label="Legal / Professional Fees" value={formatCurrency(rent.legalProfessionalFees)} />
-                          <CopyableField label="Advertising & Promotion" value={formatCurrency(rent.advertisingPromotion)} />
-                          <CopyableField label="Other Expenses" value={formatCurrency(rent.otherExpenses)} />
+                          <CopyableField label="Advertising & Promotion" value={formatCurrency(rent.advertisingPromotion ?? rent.advertisingAndPromotion)} />
+                          <CopyableField label="Other Expenses" value={formatCurrency(rent.otherExpenses ?? rent.otherExpense)} />
                           <CopyableField label="Total Expenses" value={formatCurrency(rent.totalExpenses)} className="font-medium" />
                           <CopyableField label="Net Rental Income" value={formatCurrency(rent.netRentalIncome)} className="font-semibold" />
                         </div>
@@ -1276,7 +1359,7 @@ export function T1CRAReadyForm({
       <T1CRASection
         title="Q9: Work From Home Expense (T2200)"
         icon={<Home className="h-5 w-5 text-primary" />}
-        applicable={!!formData.hasWorkFromHomeExpense}
+        applicable={!!formData.hasWorkFromHomeExpense || !!formData.workFromHomeForIndividual || !!formData.workFromHomeForSpouse || !!formData.workFromHome}
         sectionData={formData.workFromHome as unknown as Record<string, unknown>}
       >
         {[
@@ -1326,20 +1409,17 @@ export function T1CRAReadyForm({
       <T1CRASection
         title="Q10: Student (T2202A Form)"
         icon={<GraduationCap className="h-5 w-5 text-primary" />}
-        applicable={!!formData.tuition?.length}
-        sectionData={formData.tuition as unknown as Record<string, unknown>}
+        applicable={!!formData.isStudent}
+        sectionData={{ isStudent: formData.isStudent } as Record<string, unknown>}
       >
-        {formData.tuition?.map((tuit, idx) => (
-          <div key={tuit.id} className="mb-6 last:mb-0">
-            <h4 className="font-medium text-sm mb-3">{tuit.studentName} - {tuit.institutionName}</h4>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <CopyableField label="Institution Name" value={tuit.institutionName} />
-              <CopyableField label="Program Name" value={tuit.programName} />
-              <CopyableField label="T2202A Amount" value={formatCurrency(tuit.t2202aAmount)} />
-            </div>
-            {idx < (formData.tuition?.length || 0) - 1 && <Separator className="mt-6" />}
-          </div>
-        ))}
+        <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+          <p className="text-sm font-medium">
+            Client was a student last year.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Document required: T2202A form from educational institution
+          </p>
+        </div>
         <QuestionDocuments
           sectionKey="TUITION"
           sectionTitle="Tuition Documents"
@@ -1389,9 +1469,10 @@ export function T1CRAReadyForm({
       >
         <CopyableTable
           columns={[
+            { key: 'childName', header: 'Child Name', format: (v) => (v as string) || 'N/A' },
             { key: 'providerName', header: 'Childcare Provider' },
             { key: 'amountPaid', header: 'Amount', format: (v) => formatCurrency(v as number) },
-            { key: 'identificationNumberSIN', header: 'Identification Number/SIN', format: (v) => (v as string) || 'N/A' },
+            { key: 'identificationNumberSin', header: 'Provider SIN', format: (v) => (v as string) || 'N/A' },
             { key: 'weeks', header: 'Weeks', format: (v) => (v as number)?.toString() || 'N/A' },
           ]}
           data={formData.childcare || []}
@@ -1487,16 +1568,17 @@ export function T1CRAReadyForm({
       <T1CRASection
         title="Q16: RRSP/FHSA Investment"
         icon={<DollarSign className="h-5 w-5 text-primary" />}
-        applicable={!!formData.rrspContributions?.length}
-        sectionData={formData.rrspContributions as unknown as Record<string, unknown>}
+        applicable={!!formData.hasRrspFhsaInvestment}
+        sectionData={{ hasRrspFhsaInvestment: formData.hasRrspFhsaInvestment } as Record<string, unknown>}
       >
-        <CopyableTable
-          columns={[
-            { key: 'institutionName', header: 'Institution' },
-            { key: 'contributionAmount', header: 'Amount', format: (v) => formatCurrency(v as number) },
-          ]}
-          data={formData.rrspContributions || []}
-        />
+        <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+          <p className="text-sm font-medium">
+            Client has RRSP/FHSA investments.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Documents required: RRSP/FHSA contribution slips (T-slips). Enter contribution details from slips during CRA data entry.
+          </p>
+        </div>
         <QuestionDocuments
           sectionKey="RRSP"
           sectionTitle="RRSP/FHSA Documents"
@@ -1527,24 +1609,33 @@ export function T1CRAReadyForm({
         />
       </T1CRASection>
 
-      {/* Q18: Rent or Property Tax (Ontario/Alberta/Quebec) */}
+      {/* Q18: Rent or Property Tax (Ontario/Quebec) */}
       <T1CRASection
-        title="Q18: Rent or Property Tax (Ontario/Alberta/Quebec)"
+        title="Q18: Rent or Property Tax (Ontario/Quebec)"
         icon={<Home className="h-5 w-5 text-primary" />}
-        applicable={!!formData.rentPropertyTax}
-        sectionData={formData.rentPropertyTax as unknown as Record<string, unknown>}
+        applicable={!!formData.isProvinceFiler}
+        sectionData={{ isProvinceFiler: formData.isProvinceFiler } as Record<string, unknown>}
       >
-        {formData.rentPropertyTax && (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <CopyableField label="Rent or Property Tax" value={formData.rentPropertyTax.rentOrPropertyTax || 'N/A'} />
-            <div className="sm:col-span-2">
-              <CopyableField label="Property Address" value={formData.rentPropertyTax.propertyAddress} />
+        {(formData.provinceFilerEntries || (formData.rentPropertyTax ? [formData.rentPropertyTax] : [])).map((entry: any, idx: number) => (
+          <div key={idx} className="mb-6 last:mb-0">
+            {idx > 0 && <Separator className="mb-4" />}
+            {(formData.provinceFilerEntries?.length || 0) > 1 && (
+              <h4 className="font-medium text-sm mb-3">Entry {idx + 1}</h4>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {entry.province && (
+                <CopyableField label="Province" value={entry.province} />
+              )}
+              <CopyableField label="Rent or Property Tax" value={entry.rentOrPropertyTax || 'N/A'} />
+              <div className="sm:col-span-2">
+                <CopyableField label="Property Address" value={entry.propertyAddress} />
+              </div>
+              <CopyableField label="Postal Code" value={entry.postalCode || 'N/A'} />
+              <CopyableField label="No. Of Months Resides" value={(entry.monthsResides || entry.numberOfMonthsResides)?.toString() || 'N/A'} />
+              <CopyableField label="Amount Paid" value={formatCurrency(entry.amountPaid ?? entry.rentOrPropertyTaxAmount ?? entry.occupancyCost)} />
             </div>
-            <CopyableField label="Postal Code" value={formData.rentPropertyTax.postalCode || 'N/A'} />
-            <CopyableField label="No. Of Months Resides" value={(formData.rentPropertyTax.monthsResides || formData.rentPropertyTax.numberOfMonthsResides)?.toString() || 'N/A'} />
-            <CopyableField label="Amount Paid" value={formatCurrency(formData.rentPropertyTax.amountPaid || formData.rentPropertyTax.occupancyCost)} />
           </div>
-        )}
+        ))}
       </T1CRASection>
 
       {/* Q19: Disability Tax Credit */}
@@ -1561,7 +1652,15 @@ export function T1CRAReadyForm({
               <CopyableField label="First Name" value={member.firstName} />
               <CopyableField label="Last Name" value={member.lastName} />
               <CopyableField label="Relation" value={member.relation} />
-              <CopyableField label="Approved Year" value={member.approvedYear.toString()} />
+              {member.approvedYear && (
+                <CopyableField label="CRA Approval Year" value={String(member.approvedYear)} />
+              )}
+              {member.fromYear && (
+                <CopyableField label="Approved From Year" value={String(member.fromYear)} />
+              )}
+              {member.toYear && (
+                <CopyableField label="Approved To Year" value={String(member.toYear)} />
+              )}
             </div>
             {idx < (formData.disabilityTaxCredit?.length || 0) - 1 && <Separator className="mt-6" />}
           </div>

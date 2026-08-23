@@ -41,16 +41,20 @@ export interface T1PersonalInfo {
   canadianCitizen?: boolean; // Keep for backward compat
   currentAddress: {
     street: string;
+    aptSuite?: string;
     city: string;
     province: string;
     postalCode: string;
+    country?: string;
   };
   mailingAddressSame: boolean;
   mailingAddress?: {
     street: string;
+    aptSuite?: string;
     city: string;
     province: string;
     postalCode: string;
+    country?: string;
   };
   email: string;
   phone: string;

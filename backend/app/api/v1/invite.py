@@ -5,10 +5,12 @@ client with instructions to download the app and create their account.
 from __future__ import annotations
 
 import logging
+import os
 import uuid as uuidlib
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -28,6 +30,19 @@ PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.aurocode.tax
 APP_URL = "https://tax.diamondaccounts.ca"
 PRIMARY = "#1a3c5e"
 ACCENT = "#2563eb"
+
+# CRA "Authorize a Representative" job aid — attached to the invite email,
+# with a public download link included as a fallback in case the
+# attachment is stripped by the recipient's mail provider.
+CRA_JOB_AID_PDF_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+    "assets",
+    "CRA-Authorize-a-Representative.pdf",
+)
+CRA_JOB_AID_PUBLIC_URL = os.environ.get(
+    "CRA_JOB_AID_PUBLIC_URL",
+    "https://tax.diamondaccounts.ca/downloads/CRA-Authorize-a-Representative.pdf",
+)
 
 
 class InviteClientRequest(BaseModel):
@@ -64,16 +79,22 @@ You've been invited to file your personal taxes with Diamond Accounts — a trus
 {personal_plain}
 Getting started is easy:
 
-Step 1: Download the Tax Ease app from Google Play Store
+Step 1: Authorize us on your CRA My Account. If you are a first-time filer,
+        you don't have to complete this step. Otherwise, please add us as
+        your representative before we begin filing — see the attached
+        step-by-step guide, or download it here:
+        {CRA_JOB_AID_PUBLIC_URL}
+
+Step 2: Download the Tax Ease app from Google Play Store
         {PLAY_STORE_URL}
 
-Step 2: Open the app and tap "Create Account"
+Step 3: Open the app and tap "Create Account"
 
-Step 3: Enter your email address ({client_name or 'your email'}), create a password, and fill in your name
+Step 4: Enter your email address ({client_name or 'your email'}), create a password, and fill in your name
 
-Step 4: You'll receive a verification code via email — enter it to activate your account
+Step 5: You'll receive a verification code via email — enter it to activate your account
 
-Step 5: Once logged in, tap "Start Personal Tax Filing" and follow the guided questionnaire
+Step 6: Once logged in, tap "Start Personal Tax Filing" and follow the guided questionnaire
 
 That's it! Your tax advisor will review your submission and handle the rest.
 
@@ -111,13 +132,21 @@ If you have any questions, just reply to this email.
       <div style="display:flex;align-items:flex-start;margin-bottom:14px">
         <div style="min-width:28px;height:28px;background:{ACCENT};color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin-right:12px">1</div>
         <div>
+          <p style="margin:0;color:#1e293b;font-weight:600;font-size:14px">Authorize us on your CRA My Account</p>
+          <p style="margin:4px 0 0;color:#64748b;font-size:13px">If you are a first-time filer, you don't have to complete this step. Otherwise, please add us as your representative before we begin — see the attached step-by-step guide, or <a href="{CRA_JOB_AID_PUBLIC_URL}" style="color:{ACCENT}">download it here</a>.</p>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:flex-start;margin-bottom:14px">
+        <div style="min-width:28px;height:28px;background:{ACCENT};color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin-right:12px">2</div>
+        <div>
           <p style="margin:0;color:#1e293b;font-weight:600;font-size:14px">Download the App</p>
           <p style="margin:4px 0 0;color:#64748b;font-size:13px">Get "Tax Ease" from the Google Play Store</p>
         </div>
       </div>
 
       <div style="display:flex;align-items:flex-start;margin-bottom:14px">
-        <div style="min-width:28px;height:28px;background:{ACCENT};color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin-right:12px">2</div>
+        <div style="min-width:28px;height:28px;background:{ACCENT};color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin-right:12px">3</div>
         <div>
           <p style="margin:0;color:#1e293b;font-weight:600;font-size:14px">Create Your Account</p>
           <p style="margin:4px 0 0;color:#64748b;font-size:13px">Tap "Create Account", enter your email, set a password, and fill in your name</p>
@@ -125,7 +154,7 @@ If you have any questions, just reply to this email.
       </div>
 
       <div style="display:flex;align-items:flex-start;margin-bottom:14px">
-        <div style="min-width:28px;height:28px;background:{ACCENT};color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin-right:12px">3</div>
+        <div style="min-width:28px;height:28px;background:{ACCENT};color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin-right:12px">4</div>
         <div>
           <p style="margin:0;color:#1e293b;font-weight:600;font-size:14px">Verify Your Email</p>
           <p style="margin:4px 0 0;color:#64748b;font-size:13px">Enter the 6-digit code sent to your email to activate your account</p>
@@ -133,7 +162,7 @@ If you have any questions, just reply to this email.
       </div>
 
       <div style="display:flex;align-items:flex-start;margin-bottom:14px">
-        <div style="min-width:28px;height:28px;background:{ACCENT};color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin-right:12px">4</div>
+        <div style="min-width:28px;height:28px;background:{ACCENT};color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin-right:12px">5</div>
         <div>
           <p style="margin:0;color:#1e293b;font-weight:600;font-size:14px">Start Your Tax Filing</p>
           <p style="margin:4px 0 0;color:#64748b;font-size:13px">Tap "Start Personal Tax Filing" and answer the guided questionnaire — it takes about 15-20 minutes</p>
@@ -141,7 +170,7 @@ If you have any questions, just reply to this email.
       </div>
 
       <div style="display:flex;align-items:flex-start">
-        <div style="min-width:28px;height:28px;background:{ACCENT};color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin-right:12px">5</div>
+        <div style="min-width:28px;height:28px;background:{ACCENT};color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin-right:12px">6</div>
         <div>
           <p style="margin:0;color:#1e293b;font-weight:600;font-size:14px">Upload Documents & Submit</p>
           <p style="margin:4px 0 0;color:#64748b;font-size:13px">Upload any requested tax slips (T4, T5, etc.) and submit — your advisor handles the rest!</p>
@@ -176,8 +205,18 @@ If you have any questions, just reply to this email.
     return subject, html, plain
 
 
-def _send_ses_email(*, to_email: str, subject: str, html_body: str, plain_body: str) -> dict:
-    """Send email via SES. Returns {"sent": True/False, ...}."""
+def _send_ses_email(
+    *,
+    to_email: str,
+    subject: str,
+    html_body: str,
+    plain_body: str,
+    attachments: Optional[list[tuple[str, bytes, str]]] = None,
+) -> dict:
+    """Send email via SES. Returns {"sent": True/False, ...}.
+
+    `attachments` is an optional list of (filename, bytes, subtype) tuples.
+    """
     if not getattr(settings, "ENABLE_EMAIL_NOTIFICATIONS", True):
         return {"sent": False, "reason": "disabled"}
     if not to_email:
@@ -197,18 +236,47 @@ def _send_ses_email(*, to_email: str, subject: str, html_body: str, plain_body: 
         sender_email = settings.SES_FROM_EMAIL
         sender_name = settings.SENDER_NAME
 
-        mime = MIMEMultipart("alternative")
+        alt = MIMEMultipart("alternative")
+        alt.attach(MIMEText(plain_body, "plain", "utf-8"))
+        alt.attach(MIMEText(html_body, "html", "utf-8"))
+
+        if attachments:
+            mime = MIMEMultipart("mixed")
+            mime.attach(alt)
+            for filename, file_bytes, subtype in attachments:
+                part = MIMEApplication(file_bytes, _subtype=subtype)
+                part.add_header("Content-Disposition", "attachment", filename=filename)
+                mime.attach(part)
+        else:
+            mime = alt
+
         mime["Subject"] = subject
         mime["From"] = f"{sender_name} <{sender_email}>"
         mime["To"] = to_email
-        mime.attach(MIMEText(plain_body, "plain", "utf-8"))
-        mime.attach(MIMEText(html_body, "html", "utf-8"))
 
-        resp = client.send_raw_email(
-            Source=sender_email,
-            Destinations=[to_email],
-            RawMessage={"Data": mime.as_string()},
-        )
+        try:
+            resp = client.send_raw_email(
+                Source=sender_email,
+                Destinations=[to_email],
+                RawMessage={"Data": mime.as_string()},
+            )
+        except (ClientError, BotoCoreError) as exc:
+            # The SES sending identity/IAM role may not be permitted to use
+            # SendRawEmail (e.g. missing ses:SendRawEmail action). Degrade
+            # gracefully to the basic SendEmail API — this drops any
+            # attachments, but the body already includes a download link.
+            logger.warning(f"invite.send_raw_email_failed to={to_email} falling back error={exc}")
+            resp = client.send_email(
+                Source=f"{sender_name} <{sender_email}>",
+                Destination={"ToAddresses": [to_email]},
+                Message={
+                    "Subject": {"Data": subject, "Charset": "UTF-8"},
+                    "Body": {
+                        "Text": {"Data": plain_body, "Charset": "UTF-8"},
+                        "Html": {"Data": html_body, "Charset": "UTF-8"},
+                    },
+                },
+            )
         logger.info(f"invite.email.sent to={to_email} ses_id={resp.get('MessageId')}")
         return {"sent": True, "ses_message_id": resp.get("MessageId")}
     except Exception as exc:
@@ -231,11 +299,19 @@ async def invite_client(
         personal_message=req.personal_message or "",
     )
 
+    attachments = None
+    try:
+        with open(CRA_JOB_AID_PDF_PATH, "rb") as f:
+            attachments = [("CRA-Authorize-a-Representative.pdf", f.read(), "pdf")]
+    except Exception as exc:
+        logger.warning(f"invite.cra_job_aid_missing error={exc}")
+
     result = _send_ses_email(
         to_email=req.email,
         subject=subject,
         html_body=html,
         plain_body=plain,
+        attachments=attachments,
     )
 
     if result.get("sent"):

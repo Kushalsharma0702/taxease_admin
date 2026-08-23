@@ -33,11 +33,15 @@ interface DocumentActionRowProps {
   canEdit?: boolean;
 }
 
-const STATUS_CONFIG: Record<DocumentStatus, { label: string; className: string; icon: string }> = {
+const DEFAULT_STATUS_CONFIG = { label: 'Pending Review', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30', icon: '🟡' };
+
+const STATUS_CONFIG: Record<string, { label: string; className: string; icon: string }> = {
   approved: { label: 'Approved', className: 'bg-green-500/10 text-green-600 border-green-500/30', icon: '✅' },
   complete: { label: 'Pending Review', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30', icon: '🟡' },
+  uploaded: { label: 'Pending Review', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30', icon: '🟡' },
   pending: { label: 'Pending Review', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30', icon: '🟡' },
   missing: { label: 'Missing', className: 'bg-destructive/10 text-destructive border-destructive/30', icon: '🔴' },
+  rejected: { label: 'Rejected', className: 'bg-destructive/10 text-destructive border-destructive/30', icon: '🔴' },
   reupload_requested: { label: 'Re-upload Requested', className: 'bg-orange-500/10 text-orange-600 border-orange-500/30', icon: '🔁' },
 };
 
@@ -57,7 +61,7 @@ export function DocumentActionRow({
   const [isLoading, setIsLoading] = useState(false);
 
   const status = document?.status || 'missing';
-  const config = STATUS_CONFIG[status];
+  const config = STATUS_CONFIG[status] || DEFAULT_STATUS_CONFIG;
 
   const handleApprove = async () => {
     if (!document) return;

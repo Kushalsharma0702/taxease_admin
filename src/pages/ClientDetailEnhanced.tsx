@@ -158,7 +158,8 @@ export default function ClientDetailEnhanced() {
         updatedAt: new Date(clientData.updatedAt),
       };
       setClient(transformedClient);
-      setDocuments(docsData || []);
+      // getDocuments() returns { documents, total } — unwrap to the array.
+      setDocuments(docsData?.documents || []);
       setPayments(paymentsData || []);
 
       // Mock T1 questions and answers - replace with actual API calls

@@ -213,7 +213,7 @@ export const DOCUMENT_SECTION_KEYS = {
   CHARITABLE_DONATIONS: 'charitable_donations',
   MOVING_EXPENSES: 'moving_expenses',
   SELF_EMPLOYMENT: 'self_employment',
-  UBER_INCOME: 'uber_income',
+  UBER_INCOME: 'self_employment',   // Uber docs group under self-employment in admin Q5
   RENTAL_INCOME: 'rental_income',
   CAPITAL_GAINS: 'capital_gains',
   WORK_FROM_HOME: 'work_from_home',
@@ -223,8 +223,10 @@ export const DOCUMENT_SECTION_KEYS = {
   PROFESSIONAL_DUES: 'professional_dues',
   DISABILITY: 'disability_tax_credit',
   FIRST_TIME_FILER: 'first_time_filer',
+  FIRST_HOME_BUYER: 'first_home_buyer',
   RRSP: 'rrsp_contributions',
   RENT_PROPERTY_TAX: 'rent_property_tax',
+  DECEASED_RETURN: 'deceased_return',
   TAX_RETURNS: 'tax_returns',
   T183_FORM: 't183_form',
 } as const;
@@ -236,6 +238,7 @@ export type DocumentSectionKey = typeof DOCUMENT_SECTION_KEYS[keyof typeof DOCUM
  * This ensures Documents tab and Detailed Data tab show the same documents
  */
 export const CATEGORY_TO_SECTION_KEY: Record<string, DocumentSectionKey> = {
+  // Human-readable labels from the admin questionnaire
   'Employment Income': DOCUMENT_SECTION_KEYS.EMPLOYMENT,
   'Investment Income': DOCUMENT_SECTION_KEYS.INVESTMENT,
   'Foreign Property': DOCUMENT_SECTION_KEYS.FOREIGN_PROPERTY,
@@ -258,10 +261,22 @@ export const CATEGORY_TO_SECTION_KEY: Record<string, DocumentSectionKey> = {
   'Professional Dues': DOCUMENT_SECTION_KEYS.PROFESSIONAL_DUES,
   'Disability': DOCUMENT_SECTION_KEYS.DISABILITY,
   'First-Time Filer': DOCUMENT_SECTION_KEYS.FIRST_TIME_FILER,
+  'First Home Buyer': DOCUMENT_SECTION_KEYS.FIRST_HOME_BUYER,
   'PPF/EPF Contributions': DOCUMENT_SECTION_KEYS.RRSP,
   'RRSP Contributions': DOCUMENT_SECTION_KEYS.RRSP,
   'Rent/Property Tax': DOCUMENT_SECTION_KEYS.RENT_PROPERTY_TAX,
   'Home Loan': DOCUMENT_SECTION_KEYS.RENT_PROPERTY_TAX,
+  // Flutter machine keys (category strings sent by the app)
+  't2200': DOCUMENT_SECTION_KEYS.WORK_FROM_HOME,
+  't2200_spouse': DOCUMENT_SECTION_KEYS.WORK_FROM_HOME,
+  't2202': DOCUMENT_SECTION_KEYS.TUITION,
+  'child_art_sport': DOCUMENT_SECTION_KEYS.CHILDCARE,
+  'moving_expense_receipts': DOCUMENT_SECTION_KEYS.MOVING_EXPENSES,
+  'hotel_stay_receipts': DOCUMENT_SECTION_KEYS.MOVING_EXPENSES,
+  'short_term_accommodation': DOCUMENT_SECTION_KEYS.MOVING_EXPENSES,
+  'vehicle_change_permit': DOCUMENT_SECTION_KEYS.MOVING_EXPENSES,
+  'uber_income_summary': DOCUMENT_SECTION_KEYS.SELF_EMPLOYMENT,
+  'deceased_submitter_id': DOCUMENT_SECTION_KEYS.DECEASED_RETURN,
 };
 
 /**

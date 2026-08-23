@@ -91,9 +91,11 @@ export interface PersonalInfo {
   maritalStatus: 'single' | 'married' | 'common_law' | 'separated' | 'divorced' | 'widowed';
   address: {
     street: string;
+    aptSuite?: string;
     city: string;
     province: string;
     postalCode: string;
+    country?: string;
   };
   bankInfo?: {
     institution: string;
