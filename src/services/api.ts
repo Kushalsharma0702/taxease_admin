@@ -450,6 +450,19 @@ class ApiService {
     });
   }
 
+  // ─── Filing Status (/filings) — the client-facing status timeline shown ──
+  // in the Flutter app, distinct from clients.status (the CRM dropdown).
+  async updateFilingStatus(filingId: string, status: string, notes?: string) {
+    return this.request<{ filing_id: string; status: string; status_display: string; allowed_next: string[] }>(
+      `/filings/${filingId}/status`,
+      { method: 'PATCH', body: JSON.stringify({ status, notes: notes || null }) }
+    );
+  }
+
+  async getFilingTimeline(filingId: string) {
+    return this.request<{ events: Record<string, unknown>[] }>(`/filings/${filingId}/timeline`);
+  }
+
   // ─── T1 Business Forms (/t1-forms-business) ───────────────────────────────
 
   async getT1BusinessForms() {

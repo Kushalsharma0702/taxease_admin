@@ -75,6 +75,21 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { exportClientPDF } from '@/lib/pdfExport';
 import { api } from '@/services/api';
 
+// Mirrors services/admin-api/app/api/v1/filings.py's STATUS_DISPLAY_NAMES —
+// the client-facing "Filing Status" timeline in the app, distinct from
+// clients.status (the CRM dropdown driven by handleStatusUpdate below).
+const FILING_STATUS_LABELS: Record<string, string> = {
+  documents_pending: 'Additional Information Required',
+  submitted: 'Form Submitted',
+  payment_request_sent: 'Payment Request Sent',
+  payment_completed: 'Payment Received',
+  in_preparation: 'Return in Progress',
+  awaiting_approval: 'Under Review / Pending Approval',
+  filed: 'Approved for Filing',
+  completed: 'E-Filing Completed',
+  cancelled: 'Cancelled',
+};
+
 export default function ClientDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -90,6 +105,10 @@ export default function ClientDetail() {
   const [isUnlockOpen, setIsUnlockOpen] = useState(false);
   const [unlockReason, setUnlockReason] = useState('');
   const [isUnlocking, setIsUnlocking] = useState(false);
+  const [isFilingStatusOpen, setIsFilingStatusOpen] = useState(false);
+  const [pendingFilingStatus, setPendingFilingStatus] = useState('');
+  const [filingStatusNotes, setFilingStatusNotes] = useState('');
+  const [isUpdatingFilingStatus, setIsUpdatingFilingStatus] = useState(false);
   const [isLoadingClient, setIsLoadingClient] = useState(true);
   const [documents, setDocuments] = useState<any[]>([]);
   // Names of missing docs that have been requested from the client (persisted).
@@ -528,6 +547,26 @@ export default function ClientDetail() {
       });
     } finally {
       setIsUnlocking(false);
+    }
+  };
+
+  const handleUpdateFilingStatus = async () => {
+    if (!t1FormData?.filing_id || !pendingFilingStatus) return;
+    setIsUpdatingFilingStatus(true);
+    try {
+      const result = await api.updateFilingStatus(t1FormData.filing_id, pendingFilingStatus, filingStatusNotes.trim() || undefined);
+      setT1FormData((prev) => prev ? { ...prev, filing_status: result.status } : prev);
+      setIsFilingStatusOpen(false);
+      setFilingStatusNotes('');
+      toast({ title: 'Filing Status Updated', description: `Now "${result.status_display}" — client notified.` });
+    } catch (err) {
+      toast({
+        title: 'Update Failed',
+        description: err instanceof Error ? err.message : 'Could not update the filing status.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUpdatingFilingStatus(false);
     }
   };
 
@@ -1030,6 +1069,29 @@ export default function ClientDetail() {
                   >
                     <Unlock className="h-4 w-4 mr-1.5" />
                     Unlock Form
+                  </Button>
+                )}
+              </div>
+            )}
+            {t1FormData?.filing_id && (
+              <div className="flex items-center justify-between gap-3 p-3 mb-4 rounded-lg border border-border bg-muted/30">
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Filing Status (shown to client): </span>
+                  <span className="font-medium">
+                    {FILING_STATUS_LABELS[t1FormData.filing_status] || t1FormData.filing_status || 'Additional Information Required'}
+                  </span>
+                </div>
+                {hasPermission(PERMISSIONS.UPDATE_WORKFLOW) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => {
+                      setPendingFilingStatus(t1FormData.filing_status || 'documents_pending');
+                      setIsFilingStatusOpen(true);
+                    }}
+                  >
+                    Update Filing Status
                   </Button>
                 )}
               </div>
@@ -1542,6 +1604,48 @@ export default function ClientDetail() {
             <Button onClick={handleUnlockT1Form} disabled={isUnlocking}>
               {isUnlocking && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Unlock Form
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Update Filing Status Dialog */}
+      <Dialog open={isFilingStatusOpen} onOpenChange={setIsFilingStatusOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Filing Status</DialogTitle>
+            <DialogDescription>
+              This is the status the client sees on their Filing Status timeline in the app. They'll be notified of the change.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>New Status</Label>
+              <Select value={pendingFilingStatus} onValueChange={setPendingFilingStatus}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a status..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(FILING_STATUS_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Note to client (optional)</Label>
+              <Textarea
+                placeholder="e.g., We've received your payment and started preparing your return."
+                value={filingStatusNotes}
+                onChange={(e) => setFilingStatusNotes(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsFilingStatusOpen(false)}>Cancel</Button>
+            <Button onClick={handleUpdateFilingStatus} disabled={isUpdatingFilingStatus || !pendingFilingStatus}>
+              {isUpdatingFilingStatus && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Update Status
             </Button>
           </DialogFooter>
         </DialogContent>
