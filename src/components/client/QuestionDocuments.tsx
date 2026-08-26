@@ -43,6 +43,23 @@ interface QuestionDocumentsProps {
   canEdit?: boolean;
 }
 
+// The raw API response uses snake_case (uploaded_at, document_type) while the
+// DocType interface declares camelCase — the client passes the response
+// straight through without transforming it, so both spellings can show up.
+function getUploadedDate(doc: DocType): Date | null {
+  const raw = (doc as unknown as Record<string, unknown>).uploadedAt
+    ?? (doc as unknown as Record<string, unknown>).uploaded_at;
+  if (!raw) return null;
+  const d = raw instanceof Date ? raw : new Date(raw as string);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function getDocumentTypeKey(doc: DocType): string {
+  const raw = (doc as unknown as Record<string, unknown>).documentType
+    ?? (doc as unknown as Record<string, unknown>).document_type;
+  return typeof raw === 'string' && raw ? raw : '__default__';
+}
+
 const DEFAULT_STATUS_CONFIG = { label: 'Pending Review', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30', icon: '🟡' };
 
 const STATUS_CONFIG: Record<string, { label: string; className: string; icon: string }> = {
@@ -76,6 +93,7 @@ const SECTION_KEYWORDS: Record<string, string[]> = {
   [DOCUMENT_SECTION_KEYS.INVESTMENT]: ['investment', 'dividend', 'interest certificate'],
   [DOCUMENT_SECTION_KEYS.FOREIGN_PROPERTY]: ['foreign', 'us income', 'overseas'],
   [DOCUMENT_SECTION_KEYS.RENT_PROPERTY_TAX]: ['property tax', 'rl31', 'rl-31', 'province_filer', 'province filer'],
+  [DOCUMENT_SECTION_KEYS.DECEASED_RETURN]: ['deceased', 'submitter_id', 'death'],
 };
 
 export function QuestionDocuments({
@@ -124,6 +142,23 @@ export function QuestionDocuments({
       return false;
     });
   }, [documents, sectionKeyValue]);
+
+  // Newest upload first, per document-type slot, so a replaced file's older
+  // version renders below the current one instead of in upload order.
+  const orderedSectionDocs = useMemo(() => {
+    return [...sectionDocs].sort((a, b) => (getUploadedDate(b)?.getTime() ?? 0) - (getUploadedDate(a)?.getTime() ?? 0));
+  }, [sectionDocs]);
+
+  // The most recent upload per document-type slot is "current"; any earlier
+  // upload sharing that slot is a version the client has since replaced.
+  const currentDocIdsBySlot = useMemo(() => {
+    const latestBySlot = new Map<string, DocType>();
+    for (const d of orderedSectionDocs) {
+      const slot = getDocumentTypeKey(d);
+      if (!latestBySlot.has(slot)) latestBySlot.set(slot, d); // first hit = newest, since already sorted
+    }
+    return new Set(Array.from(latestBySlot.values()).map((d) => d.id));
+  }, [orderedSectionDocs]);
 
   // If no documents and no required documents, don't show the section
   if (sectionDocs.length === 0 && requiredDocuments.length === 0) {
@@ -183,6 +218,30 @@ export function QuestionDocuments({
     }
   };
 
+  const handleDownloadDoc = async (doc: DocType) => {
+    if (!doc.url) {
+      toast({ title: 'Document Not Available', description: 'Document URL is not available.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const res = await fetch(doc.url);
+      if (!res.ok) throw new Error('Download request failed');
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = doc.name || 'document';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      // Falls back to opening the file inline if it can't be fetched as a blob
+      // (e.g. a CORS-restricted host) — still gets the file in front of the admin.
+      window.open(doc.url, '_blank');
+    }
+  };
+
   const openRequestDialog = (docName: string) => {
     setRequestDocName(docName);
     setIsRequestOpen(true);
@@ -193,12 +252,13 @@ export function QuestionDocuments({
     setIsReuploadOpen(true);
   };
 
-  // Find missing required documents
-  const missingRequiredDocs = requiredDocuments.filter(reqDoc => {
-    return !sectionDocs.some(d => 
-      d.name.toLowerCase().includes(reqDoc.toLowerCase().split(' ')[0])
-    );
-  });
+  // Required docs are tracked per section, not per exact label — the client's
+  // uploaded filenames rarely resemble the requirement text (e.g. a photo
+  // named "scaled_96fdb8a2....jpg" for "Disability Approval form"), so a
+  // name/keyword match against the label produces false "Missing" flags for
+  // documents the client already uploaded. Once anything has landed in this
+  // section, treat its required documents as fulfilled rather than guessing.
+  const missingRequiredDocs = sectionDocs.length > 0 ? [] : requiredDocuments;
 
   return (
     <div className="mt-4 p-4 rounded-lg border border-dashed border-border/60 bg-muted/20">
@@ -212,14 +272,16 @@ export function QuestionDocuments({
 
       <div className="space-y-2">
         {/* Existing Documents */}
-        {sectionDocs.map((doc) => {
+        {orderedSectionDocs.map((doc) => {
           const status = doc.status || 'pending';
           const config = STATUS_CONFIG[status] || DEFAULT_STATUS_CONFIG;
+          const isSuperseded = orderedSectionDocs.length > 1 && !currentDocIdsBySlot.has(doc.id);
+          const uploadedDate = getUploadedDate(doc);
 
           return (
-            <div 
+            <div
               key={doc.id}
-              className="flex items-center justify-between p-3 rounded-lg border bg-card/50 transition-all duration-200 hover:bg-muted/30 hover:shadow-sm group"
+              className={`flex items-center justify-between p-3 rounded-lg border bg-card/50 transition-all duration-200 hover:bg-muted/30 hover:shadow-sm group ${isSuperseded ? 'opacity-60' : ''}`}
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${
@@ -236,9 +298,16 @@ export function QuestionDocuments({
                   }`} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{doc.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium truncate">{doc.name}</p>
+                    {isSuperseded && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 bg-muted text-muted-foreground border-border">
+                        Old version — replaced by client
+                      </Badge>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    {doc.fileType?.toUpperCase() || 'PDF'} • v{doc.version} • {doc.uploadedAt?.toLocaleDateString()}
+                    {doc.fileType?.toUpperCase() || 'PDF'} • v{doc.version} • {uploadedDate ? uploadedDate.toLocaleString() : 'Upload date unknown'}
                   </p>
                 </div>
               </div>
@@ -258,7 +327,17 @@ export function QuestionDocuments({
                   >
                     <Eye className="h-4 w-4" />
                   </Button>
-                  
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDownloadDoc(doc)}
+                    className="h-8 w-8 p-0"
+                    title="Download Document"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+
                   {canEdit && status !== 'approved' && onApprove && (
                     <Button
                       variant="ghost"

@@ -1702,6 +1702,17 @@ export function T1CRAReadyForm({
             </div>
           </div>
         )}
+        <QuestionDocuments
+          sectionKey="DECEASED_RETURN"
+          sectionTitle="Deceased Return Documents"
+          documents={documents}
+          requiredDocuments={['ID of Person Submitting the Return']}
+          onApprove={onApproveDoc}
+          onRequestReupload={onRequestReupload}
+          onRequestMissing={onRequestMissing}
+          onView={onViewDoc}
+          canEdit={canEdit}
+        />
       </T1CRASection>
     </div>
   );
