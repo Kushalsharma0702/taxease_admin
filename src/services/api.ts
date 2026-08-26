@@ -441,6 +441,15 @@ class ApiService {
     return this.request<void>(`/t1-forms/${formId}`, { method: 'DELETE' });
   }
 
+  // Reverses the auto-lock that client submission sets (is_locked=true), so
+  // the client can edit answers/documents and resubmit.
+  async unlockT1Form(formId: string, reason?: string) {
+    return this.request<{ id: string; is_locked: boolean; status: string }>(`/t1-forms/${formId}/unlock`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || null }),
+    });
+  }
+
   // ─── T1 Business Forms (/t1-forms-business) ───────────────────────────────
 
   async getT1BusinessForms() {

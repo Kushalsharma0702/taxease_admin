@@ -66,6 +66,8 @@ import {
   Download,
   Upload,
   FileUp,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -85,6 +87,9 @@ export default function ClientDetail() {
   const [selectedFilingId, setSelectedFilingId] = useState<string | null>(null);
   const [isLoadingFiling, setIsLoadingFiling] = useState(false);
   const [t1FormData, setT1FormData] = useState<any>(null);
+  const [isUnlockOpen, setIsUnlockOpen] = useState(false);
+  const [unlockReason, setUnlockReason] = useState('');
+  const [isUnlocking, setIsUnlocking] = useState(false);
   const [isLoadingClient, setIsLoadingClient] = useState(true);
   const [documents, setDocuments] = useState<any[]>([]);
   // Names of missing docs that have been requested from the client (persisted).
@@ -506,6 +511,25 @@ export default function ClientDetail() {
     }
   };
 
+  const handleUnlockT1Form = async () => {
+    if (!t1FormData?.id) return;
+    setIsUnlocking(true);
+    try {
+      await api.unlockT1Form(t1FormData.id, unlockReason.trim() || undefined);
+      setT1FormData((prev) => prev ? { ...prev, is_locked: false, status: 'draft' } : prev);
+      setIsUnlockOpen(false);
+      setUnlockReason('');
+      toast({ title: 'Form Unlocked', description: 'The client can now edit and resubmit this T1 form.' });
+    } catch (err) {
+      toast({
+        title: 'Unlock Failed',
+        description: err instanceof Error ? err.message : 'Could not unlock the form.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
 
   const handleViewDocument = (doc: DocType) => {
     if (doc.url) {
@@ -989,6 +1013,27 @@ export default function ClientDetail() {
 
           {/* T1 CRA Ready Form Tab — Detailed Data */}
           <TabsContent value="cra-form" className="mt-6 animate-fade-in">
+            {t1FormData?.is_locked && (
+              <div className="flex items-center justify-between gap-3 p-3 mb-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10">
+                <div className="flex items-center gap-2 text-sm text-yellow-700 dark:text-yellow-500">
+                  <Lock className="h-4 w-4 shrink-0" />
+                  <span>
+                    This form was submitted and is locked — the client cannot edit answers or replace documents until it's unlocked.
+                  </span>
+                </div>
+                {hasPermission(PERMISSIONS.UPDATE_WORKFLOW) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => setIsUnlockOpen(true)}
+                  >
+                    <Unlock className="h-4 w-4 mr-1.5" />
+                    Unlock Form
+                  </Button>
+                )}
+              </div>
+            )}
             <T1CRAReadyForm
               clientId={client.id}
               filingYear={client.filingYear}
@@ -1468,6 +1513,35 @@ export default function ClientDetail() {
             <Button onClick={handleAddPayment} disabled={isLoading}>
               {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Record Payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Unlock T1 Form Dialog */}
+      <Dialog open={isUnlockOpen} onOpenChange={setIsUnlockOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unlock T1 Form</DialogTitle>
+            <DialogDescription>
+              This reverts the form to draft so the client can edit answers and replace documents, then resubmit. They will need to resubmit for it to lock again.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Reason (optional, for the audit log)</Label>
+              <Textarea
+                placeholder="e.g., Client needs to fix the deceased-person ID document..."
+                value={unlockReason}
+                onChange={(e) => setUnlockReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsUnlockOpen(false)}>Cancel</Button>
+            <Button onClick={handleUnlockT1Form} disabled={isUnlocking}>
+              {isUnlocking && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Unlock Form
             </Button>
           </DialogFooter>
         </DialogContent>
