@@ -397,8 +397,8 @@ export default function Clients() {
         <DataTable
           data={filteredClients}
           columns={columns}
-          searchKey="name"
-          searchPlaceholder="Search clients..."
+          searchKey={['name', 'email']}
+          searchPlaceholder="Search by name or email..."
           onRowClick={(client) => navigate(`/clients/${client.id}`)}
         />
 

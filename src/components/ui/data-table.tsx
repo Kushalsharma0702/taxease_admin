@@ -28,7 +28,7 @@ interface Column<T> {
 interface DataTableProps<T> {
   data: T[];
   columns: Column<T>[];
-  searchKey?: string;
+  searchKey?: string | string[];
   searchPlaceholder?: string;
   pageSize?: number;
   onRowClick?: (item: T) => void;
@@ -47,13 +47,14 @@ export function DataTable<T extends { id: string }>({
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
 
   // Filter data
-  const filteredData = searchKey
+  const searchKeys = searchKey ? (Array.isArray(searchKey) ? searchKey : [searchKey]) : [];
+  const filteredData = searchKeys.length
     ? data.filter((item) => {
-        const value = (item as Record<string, unknown>)[searchKey];
-        if (typeof value === 'string') {
-          return value.toLowerCase().includes(search.toLowerCase());
-        }
-        return false;
+        const record = item as Record<string, unknown>;
+        return searchKeys.some((key) => {
+          const value = record[key];
+          return typeof value === 'string' && value.toLowerCase().includes(search.toLowerCase());
+        });
       })
     : data;
 
