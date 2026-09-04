@@ -105,6 +105,9 @@ export default function ClientDetail() {
   const [isUnlockOpen, setIsUnlockOpen] = useState(false);
   const [unlockReason, setUnlockReason] = useState('');
   const [isUnlocking, setIsUnlocking] = useState(false);
+  const [isLockOpen, setIsLockOpen] = useState(false);
+  const [lockReason, setLockReason] = useState('');
+  const [isLocking, setIsLocking] = useState(false);
   const [isFilingStatusOpen, setIsFilingStatusOpen] = useState(false);
   const [pendingFilingStatus, setPendingFilingStatus] = useState('');
   const [filingStatusNotes, setFilingStatusNotes] = useState('');
@@ -281,6 +284,8 @@ export default function ClientDetail() {
   const [isLoading, setIsLoading] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', email: '', phone: '' });
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('e-Transfer');
+  const [paymentNote, setPaymentNote] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
   const [isPaymentRequestOpen, setIsPaymentRequestOpen] = useState(false);
   const [paymentRequestAmount, setPaymentRequestAmount] = useState('');
@@ -386,27 +391,32 @@ export default function ClientDetail() {
       return;
     }
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    const payment = {
-      id: String(Date.now()),
-      clientId: client.id,
-      amount,
-      method: 'Credit Card',
-      reference: `PAY-${Date.now()}`,
-      note: '',
-      createdAt: new Date(),
-      createdBy: user?.name || 'Admin',
-    };
-    setPayments([payment, ...payments]);
-    setClient({
-      ...client,
-      paidAmount: client.paidAmount + amount,
-      paymentStatus: client.paidAmount + amount >= client.totalAmount ? 'paid' : 'partial',
-    });
-    setPaymentAmount('');
-    setIsAddPaymentOpen(false);
-    setIsLoading(false);
-    toast({ title: 'Payment Recorded', description: `${formatCurrency(amount)} payment recorded.` });
+    try {
+      // This previously never called the API at all — it fabricated a local
+      // payment object and updated component state directly, so nothing was
+      // ever persisted. "Recorded" payments were pure UI fiction.
+      await api.createPayment({
+        client_id: client.id,
+        amount,
+        method: paymentMethod,
+        note: paymentNote || undefined,
+      });
+      const updated = await api.getPayments({ client_id: client.id }).catch(() => []);
+      setPayments(Array.isArray(updated) ? updated : []);
+      setClient({
+        ...client,
+        paidAmount: client.paidAmount + amount,
+        paymentStatus: client.paidAmount + amount >= client.totalAmount ? 'paid' : 'partial',
+      });
+      setPaymentAmount('');
+      setPaymentNote('');
+      setIsAddPaymentOpen(false);
+      toast({ title: 'Payment Recorded', description: `${formatCurrency(amount)} payment recorded.` });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err?.message || 'Failed to record payment.', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCreatePaymentRequest = async () => {
@@ -417,19 +427,24 @@ export default function ClientDetail() {
     }
     setIsLoading(true);
     try {
-      // Persist via real API — triggers professional email to client automatically
-      await api.createPayment({
+      // A request is a notification asking the client to pay — it must NOT
+      // create a payments row. The previous version called api.createPayment
+      // (method: 'Request'), which inserts a completed payment record and
+      // requires an existing filing, so it 400'd for any client who doesn't
+      // have one yet ("Cannot record payment: no filing found for ...").
+      // Requesting payment logically comes before a filing exists, so it
+      // can't have that requirement. Use the notification endpoint instead —
+      // it sends the real payment-request email/push with no filing lookup.
+      await api.sendClientNotification({
         client_id: client.id,
+        type: 'payment_request',
+        title: 'Payment Requested',
+        message: paymentRequestNote,
         amount,
-        method: 'Request',
-        note: paymentRequestNote,
       });
       setPaymentRequestAmount('');
       setPaymentRequestNote('');
       setIsPaymentRequestOpen(false);
-      // Refresh payments list
-      const updated = await api.getPayments({ client_id: client.id }).catch(() => []);
-      setPayments(Array.isArray(updated) ? updated : []);
       toast({
         title: 'Payment Request Sent',
         description: `A payment request of ${formatCurrency(amount)} was sent to ${client.email}.`,
@@ -547,6 +562,26 @@ export default function ClientDetail() {
       });
     } finally {
       setIsUnlocking(false);
+    }
+  };
+
+  const handleLockT1Form = async () => {
+    if (!t1FormData?.id) return;
+    setIsLocking(true);
+    try {
+      await api.lockT1Form(t1FormData.id, lockReason.trim() || undefined);
+      setT1FormData((prev) => prev ? { ...prev, is_locked: true } : prev);
+      setIsLockOpen(false);
+      setLockReason('');
+      toast({ title: 'Form Locked', description: 'The client can no longer edit answers or replace documents.' });
+    } catch (err) {
+      toast({
+        title: 'Lock Failed',
+        description: err instanceof Error ? err.message : 'Could not lock the form.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLocking(false);
     }
   };
 
@@ -889,13 +924,55 @@ export default function ClientDetail() {
                     </div>
                   </div>
                   {hasPermission(PERMISSIONS.ADD_EDIT_PAYMENT) && (
-                    <Button className="w-full mt-4 transition-all duration-200 hover:scale-[1.02]" onClick={() => setIsAddPaymentOpen(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Payment
-                    </Button>
+                    <div className="grid grid-cols-2 gap-2 mt-4">
+                      <Button variant="outline" className="transition-all duration-200 hover:scale-[1.02]" onClick={() => setIsPaymentRequestOpen(true)}>
+                        <Send className="h-4 w-4 mr-2" />
+                        Request Payment
+                      </Button>
+                      <Button className="transition-all duration-200 hover:scale-[1.02]" onClick={() => setIsAddPaymentOpen(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Record Payment
+                      </Button>
+                    </div>
                   )}
                 </CardContent>
               </Card>
+
+              {/* T1 Form Access */}
+              {t1FormData?.id && (
+                <Card className="transition-all duration-300 hover:shadow-md">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      {t1FormData.is_locked ? <Lock className="h-5 w-5 text-primary" /> : <Unlock className="h-5 w-5 text-primary" />}
+                      T1 Form Access
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Status</span>
+                      <span className={`font-semibold ${t1FormData.is_locked ? 'text-yellow-600' : 'text-green-600'}`}>
+                        {t1FormData.is_locked ? 'Locked' : 'Unlocked'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {t1FormData.is_locked
+                        ? "The client cannot edit answers or replace documents."
+                        : "The client can currently edit answers and upload documents."}
+                    </p>
+                    {hasPermission(PERMISSIONS.UPDATE_WORKFLOW) && (
+                      <Button
+                        variant="outline"
+                        className="w-full transition-all duration-200 hover:scale-[1.02]"
+                        onClick={() => t1FormData.is_locked ? setIsUnlockOpen(true) : setIsLockOpen(true)}
+                      >
+                        {t1FormData.is_locked
+                          ? <><Unlock className="h-4 w-4 mr-2" />Unlock Form</>
+                          : <><Lock className="h-4 w-4 mr-2" />Lock Form</>}
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
             {/* Filings and T1 Forms */}
@@ -1569,6 +1646,23 @@ export default function ClientDetail() {
               <Label>Amount ($)</Label>
               <Input type="number" placeholder="0.00" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} />
             </div>
+            <div className="space-y-2">
+              <Label>Method</Label>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="e-Transfer">e-Transfer</SelectItem>
+                  <SelectItem value="Cash">Cash</SelectItem>
+                  <SelectItem value="Cheque">Cheque</SelectItem>
+                  <SelectItem value="Credit Card">Credit Card</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Note (optional)</Label>
+              <Textarea placeholder="Add a note for this payment record..." value={paymentNote} onChange={(e) => setPaymentNote(e.target.value)} rows={2} />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddPaymentOpen(false)}>Cancel</Button>
@@ -1604,6 +1698,35 @@ export default function ClientDetail() {
             <Button onClick={handleUnlockT1Form} disabled={isUnlocking}>
               {isUnlocking && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Unlock Form
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lock T1 Form Dialog */}
+      <Dialog open={isLockOpen} onOpenChange={setIsLockOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Lock T1 Form</DialogTitle>
+            <DialogDescription>
+              This freezes the form now, before the client has submitted it — they will not be able to edit answers or upload documents until it's unlocked again.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Reason (optional, for the audit log)</Label>
+              <Textarea
+                placeholder="e.g., Review has started, no further changes needed..."
+                value={lockReason}
+                onChange={(e) => setLockReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsLockOpen(false)}>Cancel</Button>
+            <Button onClick={handleLockT1Form} disabled={isLocking}>
+              {isLocking && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Lock Form
             </Button>
           </DialogFooter>
         </DialogContent>

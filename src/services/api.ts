@@ -450,6 +450,15 @@ class ApiService {
     });
   }
 
+  // Manually freezes a form against client edits before they've submitted it
+  // (submission already sets is_locked=true on its own).
+  async lockT1Form(formId: string, reason?: string) {
+    return this.request<{ id: string; is_locked: boolean }>(`/t1-forms/${formId}/lock`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || null }),
+    });
+  }
+
   // ─── Filing Status (/filings) — the client-facing status timeline shown ──
   // in the Flutter app, distinct from clients.status (the CRM dropdown).
   async updateFilingStatus(filingId: string, status: string, notes?: string) {
@@ -727,6 +736,11 @@ class ApiService {
     type?: string;
     title: string;
     message: string;
+    doc_name?: string;
+    amount?: number;
+    new_status?: string;
+    reason?: string;
+    filing_year?: number;
   }) {
     return this.request<any>('/notifications', {
       method: 'POST',
