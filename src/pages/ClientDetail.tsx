@@ -521,8 +521,9 @@ export default function ClientDetail() {
     try {
       await api.updateDocument(docId, { status: 'approved' });
       setDocuments((prev) => prev.map((d) => (d.id === docId ? { ...d, status: 'approved' as DocumentStatus } : d)));
-      // Email is triggered server-side by the PATCH /documents/{id}
-      toast({ title: 'Document Approved', description: `"${doc?.name || 'Document'}" approved — client notified by email.` });
+      // Deliberately silent - approving a document does not notify the
+      // client (only document REQUESTS do), so this toast must not claim it did.
+      toast({ title: 'Document Approved', description: `"${doc?.name || 'Document'}" marked as approved.` });
     } catch {
       toast({ title: 'Document Approved', description: 'Status updated.' });
     }
@@ -1244,6 +1245,26 @@ export default function ClientDetail() {
                 'rent_property_tax', 'disability_tax_credit', 't183_form',
               ];
 
+              // Documents were showing as their raw uploaded filename (e.g.
+              // "scaled_e1b93219-...jpg") instead of what they actually are.
+              // document_type is either already a friendly label (uploads
+              // made directly from the client's Documents tab send the
+              // canonical requirement label itself, e.g. "Bank Mortgage
+              // Statement") or an internal snake_case key from an in-form
+              // upload button (e.g. "rental_house_insurance", "union_dues_0")
+              // - detect which and prettify the latter.
+              const prettifyDocType = (doc: any): string => {
+                const raw = (doc.document_type || '').trim();
+                if (!raw) return doc.name || 'Document';
+                if (/[A-Z]/.test(raw) || raw.includes(' ')) return raw;
+                const withoutIndex = raw.replace(/_\d+$/, '');
+                return withoutIndex
+                  .split(/[_-]/)
+                  .filter(Boolean)
+                  .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+                  .join(' ');
+              };
+
               const classifyDoc = (doc: any): string => {
                 if (doc.sectionKey && SECTION_TITLES[doc.sectionKey]) return doc.sectionKey;
                 const nameLower = (doc.name || '').toLowerCase();
@@ -1325,7 +1346,7 @@ export default function ClientDetail() {
                             <DocumentActionRow
                               key={doc.id}
                               document={doc}
-                              requiredDocName={doc.name}
+                              requiredDocName={prettifyDocType(doc)}
                               onApprove={handleApproveDocument}
                               onRequestReupload={handleRequestReupload}
                               onRequestMissing={handleRequestDocument}

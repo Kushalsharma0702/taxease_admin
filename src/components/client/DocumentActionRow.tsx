@@ -118,10 +118,31 @@ export function DocumentActionRow({
             }`} />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium truncate">{document?.name || requiredDocName}</p>
+            {/* requiredDocName is the friendly document type (e.g. "Bank Mortgage
+                Statement"); document.name is the raw uploaded filename, shown
+                as the clickable link to actually view/download it. Previously
+                this showed document.name as the primary label, so every
+                upload just displayed its raw filename with no indication of
+                which requirement it satisfied. */}
+            <p className="text-sm font-medium truncate">
+              {requiredDocName}
+              {document && (
+                <>
+                  {': '}
+                  <button
+                    type="button"
+                    onClick={() => onView(document)}
+                    className="text-primary underline underline-offset-2 hover:no-underline font-normal"
+                    title={document.name}
+                  >
+                    document link
+                  </button>
+                </>
+              )}
+            </p>
             {document && (
-              <p className="text-xs text-muted-foreground">
-                v{document.version} • {document.uploadedAt?.toLocaleDateString()}
+              <p className="text-xs text-muted-foreground truncate">
+                {document.name} · v{document.version} • {document.uploadedAt?.toLocaleDateString()}
               </p>
             )}
           </div>
