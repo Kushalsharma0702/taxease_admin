@@ -80,12 +80,13 @@ import { api } from '@/services/api';
 // clients.status (the CRM dropdown driven by handleStatusUpdate below).
 const FILING_STATUS_LABELS: Record<string, string> = {
   documents_pending: 'Additional Information Required',
-  submitted: 'Form Submitted',
-  payment_request_sent: 'Payment Request Sent',
+  submitted: 'Under Review',
+  payment_request_sent: 'Awaiting Payment',
   payment_completed: 'Payment Received',
-  in_preparation: 'Return in Progress',
-  awaiting_approval: 'Under Review / Pending Approval',
-  filed: 'Approved for Filing',
+  in_preparation: 'Work-in-Progress',
+  awaiting_approval: 'Sent for Approval',
+  approved_by_client: 'Approval Received',
+  filed: 'Filed',
   completed: 'E-Filing Completed',
   cancelled: 'Cancelled',
 };
@@ -186,15 +187,17 @@ export default function ClientDetail() {
       setIsLoadingClient(true);
       try {
         // 1. Fetch client profile + all filings + documents + payments in parallel
-        const [filingData, directFilingsResp, directT1Data, docsResp, paymentsResp, requestedResp] = await Promise.all([
+        const [filingData, directFilingsResp, directT1Data, docsResp, paymentsResp, requestedResp, taxFilesResp] = await Promise.all([
           api.getFiling(id),
           api.request<any>(`/users/${id}/filings`).catch(() => ({ filings: [], total_filings: 0 })),
           api.getUserT1FormData(id).catch(() => null),
           api.getDocuments({ client_id: id }).catch(() => ({ documents: [], total: 0 })),
           api.getPayments({ client_id: id }).catch(() => []),
           api.getRequestedDocs(id).catch(() => [] as string[]),
+          api.getTaxFiles(id).catch(() => []),
         ]);
         setRequestedDocNames(new Set(requestedResp || []));
+        setTaxFiles(Array.isArray(taxFilesResp) ? taxFilesResp : []);
 
         // 2. If no T1 data returned, the URL param is a clients.id UUID which differs from
         //    the users.id UUID. Resolve via email: search users by the client's email and retry.
@@ -290,7 +293,7 @@ export default function ClientDetail() {
   const [isPaymentRequestOpen, setIsPaymentRequestOpen] = useState(false);
   const [paymentRequestAmount, setPaymentRequestAmount] = useState('');
   const [paymentRequestNote, setPaymentRequestNote] = useState('');
-  const [taxFiles, setTaxFiles] = useState<TaxFile[]>([]);
+  const [taxFiles, setTaxFiles] = useState<any[]>([]);
   const [isTaxFileDialogOpen, setIsTaxFileDialogOpen] = useState(false);
   const [taxFileForm, setTaxFileForm] = useState({
     refundOrOwing: 'refund' as 'refund' | 'owing',
@@ -603,6 +606,15 @@ export default function ClientDetail() {
       });
     } finally {
       setIsUpdatingFilingStatus(false);
+    }
+  };
+
+  const handleDownloadTaxFile = async (taxFileId: string, which: 't1' | 't183') => {
+    try {
+      const { url } = await api.getTaxFileDownloadUrl(taxFileId, which);
+      window.open(url, '_blank');
+    } catch (err: any) {
+      toast({ title: 'Error', description: err?.message || 'Could not get download link.', variant: 'destructive' });
     }
   };
 
@@ -1479,20 +1491,20 @@ export default function ClientDetail() {
                                 {taxFile.refundOrOwing === 'refund' ? 'Refund' : 'Owing'}: {formatCurrency(taxFile.amount)}
                               </Badge>
                             </div>
-                            {taxFile.t1ReturnUrl && (
+                            {taxFile.t1ReturnAvailable && (
                               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                                 <FileText className="h-4 w-4" />
                                 <span>T1 Return</span>
-                                <Button variant="link" size="sm" className="h-auto p-0" onClick={() => window.open(taxFile.t1ReturnUrl, '_blank')}>
+                                <Button variant="link" size="sm" className="h-auto p-0" onClick={() => handleDownloadTaxFile(taxFile.id, 't1')}>
                                   View
                                 </Button>
                               </div>
                             )}
-                            {taxFile.t183FormUrl && (
+                            {taxFile.t183FormAvailable && (
                               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                                 <FileText className="h-4 w-4" />
                                 <span>T183 Form</span>
-                                <Button variant="link" size="sm" className="h-auto p-0" onClick={() => window.open(taxFile.t183FormUrl, '_blank')}>
+                                <Button variant="link" size="sm" className="h-auto p-0" onClick={() => handleDownloadTaxFile(taxFile.id, 't183')}>
                                   View
                                 </Button>
                               </div>
@@ -1501,7 +1513,8 @@ export default function ClientDetail() {
                               <p className="text-sm text-muted-foreground mt-2 italic">{taxFile.note}</p>
                             )}
                             <p className="text-xs text-muted-foreground mt-2">
-                              Created by {taxFile.createdBy} on {formatDate(taxFile.createdAt)}
+                              Uploaded by {taxFile.uploadedByName || 'Admin'} on {formatDate(taxFile.uploadedAt)}
+                              {taxFile.status === 'approved' && taxFile.approvedAt && ` · Approved ${formatDate(taxFile.approvedAt)}`}
                             </p>
                           </div>
                         </div>
@@ -1874,29 +1887,27 @@ export default function ClientDetail() {
                   return;
                 }
                 setIsLoading(true);
-                await new Promise((resolve) => setTimeout(resolve, 500));
-                // TODO: Upload files to server and get URLs
-                const taxFile: TaxFile = {
-                  id: String(Date.now()),
-                  clientId: client.id,
-                  t1ReturnUrl: t1File ? URL.createObjectURL(t1File) : undefined,
-                  t183FormUrl: t183File ? URL.createObjectURL(t183File) : undefined,
-                  refundOrOwing: taxFileForm.refundOrOwing,
-                  amount: parseFloat(taxFileForm.amount),
-                  note: taxFileForm.note,
-                  status: 'sent',
-                  createdAt: new Date(),
-                  sentAt: new Date(),
-                  createdBy: user?.name || 'Admin',
-                };
-                setTaxFiles([taxFile, ...taxFiles]);
-                setTaxFileForm({ refundOrOwing: 'refund', amount: '', note: '' });
-                setT1File(null);
-                setT183File(null);
-                setIsTaxFileDialogOpen(false);
-                setIsLoading(false);
-                toast({ title: 'Tax Files Sent', description: 'Tax files sent to client for approval.' });
-                // TODO: Trigger email notification to client
+                try {
+                  await api.uploadTaxFiles({
+                    client_id: client.id,
+                    refund_or_owing: taxFileForm.refundOrOwing,
+                    amount: parseFloat(taxFileForm.amount),
+                    note: taxFileForm.note || undefined,
+                    t1_return: t1File || undefined,
+                    t183_form: t183File || undefined,
+                  });
+                  const updated = await api.getTaxFiles(client.id).catch(() => []);
+                  setTaxFiles(Array.isArray(updated) ? updated : []);
+                  setTaxFileForm({ refundOrOwing: 'refund', amount: '', note: '' });
+                  setT1File(null);
+                  setT183File(null);
+                  setIsTaxFileDialogOpen(false);
+                  toast({ title: 'Tax Files Sent', description: 'The client has been notified by email and app notification, and the filing was moved to "Sent for Approval".' });
+                } catch (err: any) {
+                  toast({ title: 'Error', description: err?.message || 'Failed to upload tax files.', variant: 'destructive' });
+                } finally {
+                  setIsLoading(false);
+                }
               }}
               disabled={isLoading}
             >

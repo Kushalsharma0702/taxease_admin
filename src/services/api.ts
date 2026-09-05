@@ -523,6 +523,40 @@ class ApiService {
     return this.request<void>(`/documents/${fileId}`, { method: 'DELETE' });
   }
 
+  // ─── Tax Files (/tax-files) ───────────────────────────────────────────────
+  // Real upload — previously this dialog only created a local browser blob
+  // (URL.createObjectURL) and never called any backend at all.
+  async uploadTaxFiles(data: {
+    client_id: string;
+    refund_or_owing: 'refund' | 'owing';
+    amount: number;
+    note?: string;
+    t1_return?: File;
+    t183_form?: File;
+  }) {
+    const formData = new FormData();
+    formData.append('client_id', data.client_id);
+    formData.append('refund_or_owing', data.refund_or_owing);
+    formData.append('amount', String(data.amount));
+    if (data.note) formData.append('note', data.note);
+    if (data.t1_return) formData.append('t1_return', data.t1_return);
+    if (data.t183_form) formData.append('t183_form', data.t183_form);
+    return this.request<{ id: string; filingId: string; status: string }>('/tax-files', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  async getTaxFiles(clientId: string) {
+    return this.request<any[]>(`/tax-files?client_id=${encodeURIComponent(clientId)}`);
+  }
+
+  async getTaxFileDownloadUrl(taxFileId: string, which: 't1' | 't183') {
+    return this.request<{ url: string; expiresIn: number }>(
+      `/tax-files/${taxFileId}/download-url?which=${which}`
+    );
+  }
+
   async downloadFile(fileId: string) {
     return this.request<Blob>(`/documents/${fileId}/download`);
   }
