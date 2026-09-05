@@ -82,7 +82,7 @@ const FILING_STATUS_LABELS: Record<string, string> = {
   documents_pending: 'Additional Information Required',
   submitted: 'Under Review',
   payment_request_sent: 'Awaiting Payment',
-  payment_completed: 'Payment Received',
+  payment_completed: 'Ready to Prepare',
   in_preparation: 'Work-in-Progress',
   awaiting_approval: 'Sent for Approval',
   approved_by_client: 'Approval Received',
