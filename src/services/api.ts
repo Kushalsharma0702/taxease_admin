@@ -232,11 +232,6 @@ class ApiService {
     return this.request<any>(`/clients/${id}`);
   }
 
-  async getFilingTimeline(id: string) {
-    // Not available in local backend — return empty timeline
-    return { timeline: [] };
-  }
-
   async createFiling(data: { filing_year: number }) {
     return this.request<any>('/clients', {
       method: 'POST',
@@ -740,12 +735,14 @@ class ApiService {
     page?: number;
     page_size?: number;
     entity_type?: string;
+    entity_id?: string; // comma-separated to match multiple ids (e.g. a client's id + their t1_form id)
     action?: string;
   }) {
     const q = new URLSearchParams();
     if (params?.page) q.append('page', String(params.page));
     if (params?.page_size) q.append('page_size', String(params.page_size));
     if (params?.entity_type) q.append('entity_type', params.entity_type);
+    if (params?.entity_id) q.append('entity_id', params.entity_id);
     if (params?.action) q.append('action', params.action);
     const qs = q.toString();
     try {
@@ -755,12 +752,6 @@ class ApiService {
     } catch {
       return { logs: [], total: 0, page: 1, page_size: 20, total_pages: 0 };
     }
-  }
-
-  // ─── Filing Status ────────────────────────────────────────────────────────
-
-  async updateFilingStatus(clientId: string, status: string, notes?: string) {
-    return this.updateClient(clientId, { status });
   }
 
   // ─── Notifications (/notifications) ─────────────────────────────────────

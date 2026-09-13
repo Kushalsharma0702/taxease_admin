@@ -56,7 +56,7 @@ export default function Payments() {
       setPayments(paymentsList);
       setTotalRevenue(paymentsRes?.total_revenue || paymentsList.reduce((s: number, p: any) => s + (p.amount || 0), 0));
       setAvgPayment(paymentsRes?.avg_payment || (paymentsList.length > 0 ? paymentsList.reduce((s: number, p: any) => s + (p.amount || 0), 0) / paymentsList.length : 0));
-      setClients(clientsRes?.clients || []);
+      setClients(clientsRes?.filings || []);
     } catch (error) {
       console.error('Failed to fetch payments:', error);
       toast({ title: 'Error', description: 'Failed to load payments.', variant: 'destructive' });

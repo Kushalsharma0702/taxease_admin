@@ -68,6 +68,8 @@ import {
   FileUp,
   Lock,
   Unlock,
+  History,
+  ArrowRight,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -120,6 +122,9 @@ export default function ClientDetail() {
   const [payments, setPayments] = useState<any[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [questionnaire, setQuestionnaire] = useState<any>(null);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState(false);
+  const [hasLoadedAuditLogs, setHasLoadedAuditLogs] = useState(false);
   // Real users.id resolved from clients.email (may differ from the URL :id which is clients.id)
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(null);
 
@@ -597,7 +602,14 @@ export default function ClientDetail() {
       setT1FormData((prev) => prev ? { ...prev, filing_status: result.status } : prev);
       setIsFilingStatusOpen(false);
       setFilingStatusNotes('');
-      toast({ title: 'Filing Status Updated', description: `Now "${result.status_display}" — client notified.` });
+      // Only the "filed" transition actually emails/notifies the client
+      // (services/admin-api/app/api/v1/filings.py) — every other status
+      // change is silent to the client by design, so don't claim otherwise.
+      const clientWasNotified = result.status === 'filed';
+      toast({
+        title: 'Filing Status Updated',
+        description: `Now "${result.status_display}"${clientWasNotified ? ' — client notified.' : '.'}`,
+      });
     } catch (err) {
       toast({
         title: 'Update Failed',
@@ -629,6 +641,48 @@ export default function ClientDetail() {
       });
     }
   };
+
+  // Lazy-load this client's activity log the first time the Activity tab is
+  // opened. Audit log rows are keyed by whatever entity the action touched
+  // (the client record itself, their T1 form, a payment, a document, a tax
+  // file) rather than a single "client id" - so this gathers every id
+  // actually related to this client and asks for all of them at once.
+  useEffect(() => {
+    if (activeTab !== 'activity' || hasLoadedAuditLogs || !client?.id) return;
+    const entityIds = [
+      client.id,
+      t1FormData?.id,
+      ...payments.map((p) => p.id),
+      ...documents.map((d) => d.id),
+      ...taxFiles.map((t) => t.id),
+    ].filter(Boolean);
+
+    setIsLoadingAuditLogs(true);
+    api.getAuditLogs({ entity_id: entityIds.join(','), page_size: 100 })
+      .then((data) => {
+        const logsList = (data as any)?.logs || [];
+        setAuditLogs(
+          logsList
+            .map((l: any) => ({
+              ...l,
+              performedByName: l.performed_by_name || 'Unknown',
+              entityType: l.entity_type,
+              oldValue: l.old_value,
+              newValue: l.new_value,
+              timestamp: new Date(l.timestamp),
+            }))
+            .sort((a: any, b: any) => b.timestamp.getTime() - a.timestamp.getTime())
+        );
+      })
+      .catch((err) => {
+        console.error('Failed to fetch client activity log:', err);
+        toast({ title: 'Error', description: 'Failed to load activity log.', variant: 'destructive' });
+      })
+      .finally(() => {
+        setIsLoadingAuditLogs(false);
+        setHasLoadedAuditLogs(true);
+      });
+  }, [activeTab, hasLoadedAuditLogs, client, t1FormData, payments, documents, taxFiles, toast]);
 
   return (
     <RequestedDocsContext.Provider value={requestedDocNames}>
@@ -738,7 +792,7 @@ export default function ClientDetail() {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-flex">
+          <TabsList className="grid w-full grid-cols-7 lg:w-auto lg:inline-flex">
             <TabsTrigger value="overview" className="transition-all duration-200">
               <User className="h-4 w-4 mr-2" />
               Overview
@@ -762,6 +816,10 @@ export default function ClientDetail() {
             <TabsTrigger value="notes" className="transition-all duration-200">
               <MessageSquare className="h-4 w-4 mr-2" />
               Notes
+            </TabsTrigger>
+            <TabsTrigger value="activity" className="transition-all duration-200">
+              <History className="h-4 w-4 mr-2" />
+              Activity
             </TabsTrigger>
           </TabsList>
 
@@ -1588,6 +1646,68 @@ export default function ClientDetail() {
                                 </>
                               )}
                             </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Activity Tab — every audit-logged action tied to this client:
+              their own record, T1 form locks, payments, documents, tax files. */}
+          <TabsContent value="activity" className="mt-6 animate-fade-in">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Activity Log</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {isLoadingAuditLogs ? (
+                    <div className="flex justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : auditLogs.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">No activity recorded for this client yet.</p>
+                  ) : (
+                    auditLogs.map((log) => (
+                      <div
+                        key={log.id}
+                        className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-lg bg-muted/30 border border-border"
+                      >
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge>{log.action}</Badge>
+                            <span className="text-sm text-muted-foreground">on {log.entityType}</span>
+                          </div>
+                          {(log.oldValue || log.newValue) && (
+                            <div className="flex items-center gap-2 text-sm flex-wrap">
+                              {log.oldValue && (
+                                <span className="px-2 py-0.5 rounded bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                                  {log.oldValue}
+                                </span>
+                              )}
+                              {log.oldValue && log.newValue && (
+                                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                              )}
+                              {log.newValue && (
+                                <span className="px-2 py-0.5 rounded bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                                  {log.newValue}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <User className="h-4 w-4" />
+                            <span>{log.performedByName}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-4 w-4" />
+                            <span>{log.timestamp.toLocaleString()}</span>
                           </div>
                         </div>
                       </div>
