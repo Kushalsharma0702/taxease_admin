@@ -327,6 +327,54 @@ export default function ClientDetail() {
     return { approved, pending, missing, reuploadRequested, total: documents.length };
   }, [documents]);
 
+  // Lazy-load this client's activity log the first time the Activity tab is
+  // opened. Audit log rows are keyed by whatever entity the action touched
+  // (the client record itself, their T1 form, a payment, a document, a tax
+  // file) rather than a single "client id" - so this gathers every id
+  // actually related to this client and asks for all of them at once.
+  //
+  // MUST stay above the isLoadingClient/!client early returns below: those
+  // return before reaching any hook placed after them, so on the first render
+  // (isLoadingClient === true) this hook would be skipped and then appear on
+  // the next one, which React rejects with "Rendered more hooks than during
+  // the previous render" - crashing every client page into the ErrorBoundary.
+  useEffect(() => {
+    if (activeTab !== 'activity' || hasLoadedAuditLogs || !client?.id) return;
+    const entityIds = [
+      client.id,
+      t1FormData?.id,
+      ...payments.map((p) => p.id),
+      ...documents.map((d) => d.id),
+      ...taxFiles.map((t) => t.id),
+    ].filter(Boolean);
+
+    setIsLoadingAuditLogs(true);
+    api.getAuditLogs({ entity_id: entityIds.join(','), page_size: 100 })
+      .then((data) => {
+        const logsList = (data as any)?.logs || [];
+        setAuditLogs(
+          logsList
+            .map((l: any) => ({
+              ...l,
+              performedByName: l.performed_by_name || 'Unknown',
+              entityType: l.entity_type,
+              oldValue: l.old_value,
+              newValue: l.new_value,
+              timestamp: new Date(l.timestamp),
+            }))
+            .sort((a: any, b: any) => b.timestamp.getTime() - a.timestamp.getTime())
+        );
+      })
+      .catch((err) => {
+        console.error('Failed to fetch client activity log:', err);
+        toast({ title: 'Error', description: 'Failed to load activity log.', variant: 'destructive' });
+      })
+      .finally(() => {
+        setIsLoadingAuditLogs(false);
+        setHasLoadedAuditLogs(true);
+      });
+  }, [activeTab, hasLoadedAuditLogs, client, t1FormData, payments, documents, taxFiles, toast]);
+
   if (isLoadingClient) {
     return (
       <DashboardLayout title="Loading..." breadcrumbs={[{ label: 'Clients', href: '/clients' }]}>
@@ -641,48 +689,6 @@ export default function ClientDetail() {
       });
     }
   };
-
-  // Lazy-load this client's activity log the first time the Activity tab is
-  // opened. Audit log rows are keyed by whatever entity the action touched
-  // (the client record itself, their T1 form, a payment, a document, a tax
-  // file) rather than a single "client id" - so this gathers every id
-  // actually related to this client and asks for all of them at once.
-  useEffect(() => {
-    if (activeTab !== 'activity' || hasLoadedAuditLogs || !client?.id) return;
-    const entityIds = [
-      client.id,
-      t1FormData?.id,
-      ...payments.map((p) => p.id),
-      ...documents.map((d) => d.id),
-      ...taxFiles.map((t) => t.id),
-    ].filter(Boolean);
-
-    setIsLoadingAuditLogs(true);
-    api.getAuditLogs({ entity_id: entityIds.join(','), page_size: 100 })
-      .then((data) => {
-        const logsList = (data as any)?.logs || [];
-        setAuditLogs(
-          logsList
-            .map((l: any) => ({
-              ...l,
-              performedByName: l.performed_by_name || 'Unknown',
-              entityType: l.entity_type,
-              oldValue: l.old_value,
-              newValue: l.new_value,
-              timestamp: new Date(l.timestamp),
-            }))
-            .sort((a: any, b: any) => b.timestamp.getTime() - a.timestamp.getTime())
-        );
-      })
-      .catch((err) => {
-        console.error('Failed to fetch client activity log:', err);
-        toast({ title: 'Error', description: 'Failed to load activity log.', variant: 'destructive' });
-      })
-      .finally(() => {
-        setIsLoadingAuditLogs(false);
-        setHasLoadedAuditLogs(true);
-      });
-  }, [activeTab, hasLoadedAuditLogs, client, t1FormData, payments, documents, taxFiles, toast]);
 
   return (
     <RequestedDocsContext.Provider value={requestedDocNames}>
