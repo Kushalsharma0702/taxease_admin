@@ -38,7 +38,7 @@ import {
 import { T1CRAReadyForm } from '@/components/client/T1CRAReadyForm';
 import { RequestedDocsContext } from '@/components/client/QuestionDocuments';
 import { DocumentActionRow } from '@/components/client/DocumentActionRow';
-import { STATUS_LABELS, ClientStatus, PERMISSIONS, Note, Document as DocType, T1Question, DocumentStatus, TaxFile } from '@/types';
+import { PIPELINE_STATUS_LABELS, ADMIN_SETTABLE_STATUSES, ClientStatus, PERMISSIONS, Note, Document as DocType, T1Question, DocumentStatus, TaxFile } from '@/types';
 import {
   User,
   Mail,
@@ -77,21 +77,13 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { exportClientPDF } from '@/lib/pdfExport';
 import { api } from '@/services/api';
 
-// Mirrors services/admin-api/app/api/v1/filings.py's STATUS_DISPLAY_NAMES —
-// the client-facing "Filing Status" timeline in the app, distinct from
-// clients.status (the CRM dropdown driven by handleStatusUpdate below).
-const FILING_STATUS_LABELS: Record<string, string> = {
-  documents_pending: 'Additional Information Required',
-  submitted: 'Under Review',
-  payment_request_sent: 'Awaiting Payment',
-  payment_completed: 'Ready to Prepare',
-  in_preparation: 'Work-in-Progress',
-  awaiting_approval: 'Sent for Approval',
-  approved_by_client: 'Approval Received',
-  filed: 'Filed',
-  completed: 'E-Filing Completed',
-  cancelled: 'Cancelled',
-};
+// Mirrors services/admin-api/app/api/v1/filings.py's STATUS_DISPLAY_NAMES.
+// This is now the *only* status shown on this page: the header badge and
+// dropdown drive filings.status, and admin-api mirrors it onto clients.status
+// so the client list agrees. Previously the header read clients.status, which
+// no automatic transition ever wrote — uploading tax files moved the filing to
+// "Sent for Approval" while this page still said "In Preparation".
+const FILING_STATUS_LABELS: Record<string, string> = PIPELINE_STATUS_LABELS;
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -100,7 +92,6 @@ export default function ClientDetail() {
   const { toast } = useToast();
 
   const [client, setClient] = useState<any>(null);
-  const [userFilings, setUserFilings] = useState<any[]>([]);
   const [allFilings, setAllFilings] = useState<any[]>([]);
   const [selectedFilingId, setSelectedFilingId] = useState<string | null>(null);
   const [isLoadingFiling, setIsLoadingFiling] = useState(false);
@@ -240,7 +231,6 @@ export default function ClientDetail() {
         // 3. userT1Data shape: { user_id, has_t1_form, t1_form: { ...answers } }
         const fullT1Form = userT1Data?.t1_form || null;
 
-        setUserFilings(filingData ? [filingData] : []);
         setT1FormData(fullT1Form || null);
 
         // 3. Build questionnaire from the first/latest T1 form
@@ -327,6 +317,18 @@ export default function ClientDetail() {
     return { approved, pending, missing, reuploadRequested, total: documents.length };
   }, [documents]);
 
+  // The filing currently in view — the year selector below swaps which one
+  // t1FormData refers to, so the header must follow it rather than the
+  // clients.filing_year column (which is stamped once at sync time and was
+  // showing 2025 for a filing the client had set to 2026).
+  const selectedFiling = useMemo(
+    () => allFilings.find((f: any) => f.filing_id === selectedFilingId) || allFilings[0] || null,
+    [allFilings, selectedFilingId]
+  );
+  const displayFilingYear =
+    t1FormData?.filing_year ?? selectedFiling?.filing_year ?? client?.filingYear ?? new Date().getFullYear();
+  const filingStatus: string = t1FormData?.filing_status || selectedFiling?.filing_status || client?.status || 'draft';
+
   // Lazy-load this client's activity log the first time the Activity tab is
   // opened. Audit log rows are keyed by whatever entity the action touched
   // (the client record itself, their T1 form, a payment, a document, a tax
@@ -343,6 +345,8 @@ export default function ClientDetail() {
     const entityIds = [
       client.id,
       t1FormData?.id,
+      // Filing ids too — "Filing Status Changed" rows are keyed on the filing.
+      ...allFilings.map((f: any) => f.filing_id),
       ...payments.map((p) => p.id),
       ...documents.map((d) => d.id),
       ...taxFiles.map((t) => t.id),
@@ -373,7 +377,7 @@ export default function ClientDetail() {
         setIsLoadingAuditLogs(false);
         setHasLoadedAuditLogs(true);
       });
-  }, [activeTab, hasLoadedAuditLogs, client, t1FormData, payments, documents, taxFiles, toast]);
+  }, [activeTab, hasLoadedAuditLogs, client, t1FormData, allFilings, payments, documents, taxFiles, toast]);
 
   if (isLoadingClient) {
     return (
@@ -419,12 +423,22 @@ export default function ClientDetail() {
     toast({ title: 'Note Added', description: isClientFacing ? 'Client-facing note added.' : 'Internal note added.' });
   };
 
-  const handleStatusUpdate = async (newStatus: string) => {
-    setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    setClient({ ...client, status: newStatus as ClientStatus });
-    setIsLoading(false);
-    toast({ title: 'Status Updated', description: `Status changed to ${STATUS_LABELS[newStatus as ClientStatus]}.` });
+  // The header dropdown used to fake a status change: it set local state and
+  // toasted "Status Updated" without ever calling the API, so nothing was
+  // persisted and the client's app never saw it. It now routes through the
+  // same confirm dialog as "Update Filing Status" (which posts to
+  // PATCH /filings/{id}/status and validates the transition server-side).
+  const handleStatusUpdate = (newStatus: string) => {
+    if (!t1FormData?.filing_id) {
+      toast({
+        title: 'No filing to update',
+        description: 'This client has no filing record yet, so there is no status to change.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setPendingFilingStatus(newStatus);
+    setIsFilingStatusOpen(true);
   };
 
   const handleEditClient = async () => {
@@ -648,6 +662,9 @@ export default function ClientDetail() {
     try {
       const result = await api.updateFilingStatus(t1FormData.filing_id, pendingFilingStatus, filingStatusNotes.trim() || undefined);
       setT1FormData((prev) => prev ? { ...prev, filing_status: result.status } : prev);
+      // admin-api mirrors filings.status onto clients.status; reflect that here
+      // so the Clients list shows the new value without a hard refresh.
+      setClient((prev: any) => prev ? { ...prev, status: result.status } : prev);
       setIsFilingStatusOpen(false);
       setFilingStatusNotes('');
       // Only the "filed" transition actually emails/notifies the client
@@ -714,22 +731,26 @@ export default function ClientDetail() {
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">{client.name}</h1>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>Filing Year: {client.filingYear}</span>
+                  <span>Filing Year: {displayFilingYear}</span>
                   <span>•</span>
-                  <StatusBadge status={client.status} type="client" />
+                  <StatusBadge status={filingStatus as ClientStatus} type="client" />
                 </div>
               </div>
             </div>
           </div>
           <div className="flex gap-2 ml-auto">
             {hasPermission(PERMISSIONS.UPDATE_WORKFLOW) && (
-              <Select defaultValue={client.status} onValueChange={handleStatusUpdate}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Update Status" />
+              <Select
+                value={filingStatus}
+                onValueChange={handleStatusUpdate}
+                disabled={!t1FormData?.filing_id}
+              >
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder={t1FormData?.filing_id ? 'Update Status' : 'No filing yet'} />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  {ADMIN_SETTABLE_STATUSES.map((key) => (
+                    <SelectItem key={key} value={key}>{PIPELINE_STATUS_LABELS[key]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -743,12 +764,13 @@ export default function ClientDetail() {
                     setIsLoading(true);
                     try {
                       await exportClientPDF({
-                        client,
+                        client: { ...client, filingYear: displayFilingYear, status: filingStatus },
                         documents,
                         payments,
                         notes,
                         taxFiles,
                         questionnaire,
+                        t1FormData,
                       });
                       toast({ 
                         title: 'PDF Exported', 
@@ -1052,17 +1074,21 @@ export default function ClientDetail() {
               )}
             </div>
 
-            {/* Filings and T1 Forms */}
-            {userFilings.length > 0 && (
+            {/* Filings and T1 Forms — driven by GET /users/{id}/filings.
+                This block previously mapped over `userFilings`, which holds a
+                single *client* record (from GET /clients/{id}) with none of
+                the filing_* fields it reads, so every row rendered
+                "Filing Year: undefined / Created: Invalid Date". */}
+            {allFilings.length > 0 && (
               <Card className="transition-all duration-300 hover:shadow-md">
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-lg">
                     <FileText className="h-5 w-5 text-primary" />
-                    Filings & T1 Forms ({userFilings.length})
+                    Filings & T1 Forms ({allFilings.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {userFilings.map((filing) => (
+                  {allFilings.map((filing) => (
                     <div key={filing.id || filing.filing_id || filing.filing_year} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
                       <div className="flex items-center justify-between mb-3">
                         <div>
@@ -1072,8 +1098,8 @@ export default function ClientDetail() {
                           </p>
                         </div>
                         <div className="text-right text-sm text-muted-foreground">
-                          <p>Created: {new Date(filing.filing_created).toLocaleDateString()}</p>
-                          <p>Updated: {new Date(filing.filing_updated).toLocaleDateString()}</p>
+                          <p>Created: {filing.filing_created ? new Date(filing.filing_created).toLocaleDateString() : '—'}</p>
+                          <p>Updated: {filing.filing_updated ? new Date(filing.filing_updated).toLocaleDateString() : '—'}</p>
                         </div>
                       </div>
                       
@@ -1909,8 +1935,8 @@ export default function ClientDetail() {
                   <SelectValue placeholder="Select a status..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(FILING_STATUS_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  {ADMIN_SETTABLE_STATUSES.map((value) => (
+                    <SelectItem key={value} value={value}>{PIPELINE_STATUS_LABELS[value]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

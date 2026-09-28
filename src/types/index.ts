@@ -17,15 +17,31 @@ export interface User {
   createdAt: Date;
 }
 
-export type ClientStatus = 
+// The filing pipeline, in order. These are the values admin-api writes to
+// BOTH filings.status (the timeline the client sees in the app) and
+// clients.status (this dashboard's list column) — one vocabulary, one source
+// of truth, so an automatic transition can never leave the two disagreeing.
+export type FilingPipelineStatus =
+  | 'draft'
   | 'documents_pending'
-  | 'under_review'
-  | 'cost_estimate_sent'
-  | 'awaiting_payment'
+  | 'submitted'
+  | 'payment_request_sent'
+  | 'payment_completed'
   | 'in_preparation'
   | 'awaiting_approval'
+  | 'approved_by_client'
   | 'filed'
-  | 'completed';
+  | 'completed'
+  | 'cancelled';
+
+// Values older clients.status rows still hold, kept so historical records
+// render with a label instead of a raw slug.
+export type LegacyClientStatus =
+  | 'under_review'
+  | 'cost_estimate_sent'
+  | 'awaiting_payment';
+
+export type ClientStatus = FilingPipelineStatus | LegacyClientStatus;
 
 export type PaymentStatus = 'pending' | 'partial' | 'paid' | 'overdue';
 
@@ -205,15 +221,45 @@ export const PERMISSIONS = {
   UPDATE_WORKFLOW: 'update_workflow',
 } as const;
 
+// Wording comes from the agreed status mapping:
+//   form filled → Under Review → payment request sent → Awaiting Payment →
+//   payment recorded → Ready to Prepare → Work-in-Progress →
+//   Sent for Approval → Approval Received → Filed
+export const PIPELINE_STATUS_LABELS: Record<FilingPipelineStatus, string> = {
+  draft: 'Form in Draft',
+  documents_pending: 'Additional Information Required',
+  submitted: 'Under Review',
+  payment_request_sent: 'Awaiting Payment',
+  payment_completed: 'Ready to Prepare',
+  in_preparation: 'Work-in-Progress',
+  awaiting_approval: 'Sent for Approval',
+  approved_by_client: 'Approval Received',
+  filed: 'Filed',
+  completed: 'E-Filing Completed',
+  cancelled: 'Cancelled',
+};
+
+// Statuses an admin may set by hand. Excludes the two the system owns:
+// 'draft' (the client hasn't submitted yet) and 'approved_by_client' (only
+// the client's own approval in the app can produce it).
+export const ADMIN_SETTABLE_STATUSES: FilingPipelineStatus[] = [
+  'documents_pending',
+  'submitted',
+  'payment_request_sent',
+  'payment_completed',
+  'in_preparation',
+  'awaiting_approval',
+  'filed',
+  'completed',
+  'cancelled',
+];
+
 export const STATUS_LABELS: Record<ClientStatus, string> = {
-  documents_pending: 'Documents Pending',
+  ...PIPELINE_STATUS_LABELS,
+  // Legacy clients.status values, mapped onto the same wording.
   under_review: 'Under Review',
   cost_estimate_sent: 'Cost Estimate Sent',
   awaiting_payment: 'Awaiting Payment',
-  in_preparation: 'In Preparation',
-  awaiting_approval: 'Awaiting Client Approval',
-  filed: 'Filed',
-  completed: 'Completed',
 };
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {

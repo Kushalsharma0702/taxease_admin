@@ -7,14 +7,21 @@ interface StatusBadgeProps {
 }
 
 const clientStatusColors: Record<ClientStatus, string> = {
+  draft: 'bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-300',
   documents_pending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+  submitted: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+  payment_request_sent: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
+  payment_completed: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
+  in_preparation: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400',
+  awaiting_approval: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
+  approved_by_client: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
+  filed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
+  completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+  cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  // Legacy clients.status values still present on older rows.
   under_review: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
   cost_estimate_sent: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
   awaiting_payment: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
-  in_preparation: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400',
-  awaiting_approval: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
-  filed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-  completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
 };
 
 const paymentStatusColors: Record<PaymentStatus, string> = {

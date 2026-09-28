@@ -381,7 +381,10 @@ export default function Clients() {
           {[
             { label: 'Total Clients', value: filteredClients.length, color: '' },
             { label: 'Documents Pending', value: filteredClients.filter(c => c.status === 'documents_pending').length, color: 'text-amber-600' },
-            { label: 'Awaiting Payment', value: filteredClients.filter(c => c.status === 'awaiting_payment').length, color: 'text-orange-600' },
+            // clients.status now carries the filing pipeline value
+            // ('payment_request_sent'); 'awaiting_payment' is the legacy
+            // spelling older rows still hold. Count both.
+            { label: 'Awaiting Payment', value: filteredClients.filter(c => c.status === 'payment_request_sent' || c.status === 'awaiting_payment').length, color: 'text-orange-600' },
             { label: 'Completed', value: filteredClients.filter(c => c.status === 'completed' || c.status === 'filed').length, color: 'text-green-600' },
           ].map((stat, index) => (
             <div 

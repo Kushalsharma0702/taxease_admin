@@ -10,15 +10,23 @@ interface FilingStatusBadgeProps {
   lastUpdatedAt?: Date;
 }
 
+// Labels track PIPELINE_STATUS_LABELS in @/types; the last three keys are the
+// legacy clients.status values older rows still carry.
 const STATUS_CONFIG: Record<ClientStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string }> = {
-  documents_pending: { label: 'Documents Pending', variant: 'secondary' },
+  draft: { label: 'Form in Draft', variant: 'secondary' },
+  documents_pending: { label: 'Additional Info Required', variant: 'secondary' },
+  submitted: { label: 'Under Review', variant: 'outline', className: 'border-blue-500 text-blue-600' },
+  payment_request_sent: { label: 'Awaiting Payment', variant: 'outline', className: 'border-orange-500 text-orange-600' },
+  payment_completed: { label: 'Ready to Prepare', variant: 'outline', className: 'border-teal-500 text-teal-600' },
+  in_preparation: { label: 'Work-in-Progress', variant: 'default', className: 'bg-blue-600' },
+  awaiting_approval: { label: 'Sent for Approval', variant: 'outline', className: 'border-yellow-500 text-yellow-600' },
+  approved_by_client: { label: 'Approval Received', variant: 'outline', className: 'border-violet-500 text-violet-600' },
+  filed: { label: 'Filed', variant: 'default', className: 'bg-green-600' },
+  completed: { label: 'E-Filing Completed', variant: 'default', className: 'bg-green-700' },
+  cancelled: { label: 'Cancelled', variant: 'destructive' },
   under_review: { label: 'Under Review', variant: 'outline', className: 'border-blue-500 text-blue-600' },
   cost_estimate_sent: { label: 'Estimate Sent', variant: 'outline', className: 'border-purple-500 text-purple-600' },
   awaiting_payment: { label: 'Awaiting Payment', variant: 'outline', className: 'border-orange-500 text-orange-600' },
-  in_preparation: { label: 'In Preparation', variant: 'default', className: 'bg-blue-600' },
-  awaiting_approval: { label: 'Awaiting Approval', variant: 'outline', className: 'border-yellow-500 text-yellow-600' },
-  filed: { label: 'Filed', variant: 'default', className: 'bg-green-600' },
-  completed: { label: 'Completed', variant: 'default', className: 'bg-green-700' },
 };
 
 export function FilingStatusBadge({

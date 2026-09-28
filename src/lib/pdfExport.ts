@@ -4,6 +4,7 @@ import autoTable from 'jspdf-autotable';
 import { Client, Document, Payment, Note, TaxFile, T1Questionnaire } from '@/types';
 import { formatCurrency, formatDate } from './utils';
 import { getT1FormData } from '@/data/mockT1FormData';
+import { convertApiDataToFormData } from './t1FormAdapter';
 import { CATEGORY_TO_SECTION_KEY } from './api/config';
 
 interface PDFExportOptions {
@@ -13,6 +14,8 @@ interface PDFExportOptions {
   notes: Note[];
   taxFiles: TaxFile[];
   questionnaire?: T1Questionnaire;
+  /** Raw T1 form from GET /users/{id}/t1-form-data — `{ ..., answers: [...] }`. */
+  t1FormData?: any;
 }
 
 // Section configuration for T1 form
@@ -75,8 +78,17 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
   const doc = new jsPDF();
   let yPosition = 20;
 
-  // Use live questionnaire data if available; fallback to mock data only when needed.
-  const t1FormData = questionnaire?.questions?.length ? null : getT1FormData(client.id);
+  // Real answers first. This used to read
+  //   questionnaire?.questions?.length ? null : getT1FormData(client.id)
+  // — i.e. it deliberately threw the data away the moment a client actually
+  // had answers, leaving every section "Not Applicable" and every personal
+  // detail "N/A". convertApiDataToFormData is the same adapter the on-screen
+  // Detailed Data tab uses, so the PDF now matches what the admin sees.
+  // `any`: the adapter's inferred shape and the mock's T1FormData differ in
+  // dozens of optional fields, and every read below is already defensive.
+  const t1FormData: any =
+    convertApiDataToFormData(options.t1FormData) ??
+    (questionnaire?.questions?.length ? null : getT1FormData(client.id));
 
   // Helper function to add new page if needed
   const checkNewPage = (requiredSpace: number) => {
@@ -176,8 +188,11 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
 
   yPosition = (doc as any).lastAutoTable?.finalY + 10 || yPosition + 30;
 
-  // ============ QUESTIONNAIRE ANSWERS (LIVE) ============
-  if (questionnaire?.questions?.length) {
+  // ============ QUESTIONNAIRE ANSWERS (RAW) ============
+  // Only rendered as a last resort: `question` here is a prettified field_key
+  // ("MedicalExpenses.0.PatientName"), not a real question title, so it is
+  // suppressed whenever the structured sections below have data to print.
+  if (!t1FormData && questionnaire?.questions?.length) {
     checkNewPage(40);
     addSectionHeader('Questionnaire Answers (Live Data)', true);
 
