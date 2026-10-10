@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -246,7 +246,7 @@ export function T1CRAReadyForm({
       </T1CRASection>
 
       {/* Spouse Information */}
-      {formData.personalInfo.spouseInfo && (formData.personalInfo.maritalStatus === 'married' || formData.personalInfo.maritalStatus === 'common-law') && (
+      {formData.personalInfo.spouseInfo && (
         <T1CRASection
           title="Spouse Information"
           icon={<Users className="h-5 w-5 text-primary" />}
@@ -261,14 +261,39 @@ export function T1CRAReadyForm({
             <CopyableField label="Last Name" value={formData.personalInfo.spouseInfo.lastName} />
             <CopyableField label="SIN (Spouse)" value={formData.personalInfo.spouseInfo.sin} />
             <CopyableField label="Date of Birth" value={formatDate(formData.personalInfo.spouseInfo.dateOfBirth)} />
+            <CopyableField label="Canadian Citizen" value={formData.personalInfo.spouseInfo.isCanadianCitizen ? 'Yes' : 'No'} />
             {formData.personalInfo.spouseInfo.email && (
               <CopyableField label="Email" value={formData.personalInfo.spouseInfo.email} />
             )}
             {formData.personalInfo.spouseInfo.phoneNumber && (
               <CopyableField label="Phone Number" value={formData.personalInfo.spouseInfo.phoneNumber} />
             )}
+            {formData.personalInfo.spouseInfo.street && (
+              <CopyableField label="Street Address" value={formData.personalInfo.spouseInfo.street} />
+            )}
+            {formData.personalInfo.spouseInfo.city && (
+              <CopyableField label="City" value={formData.personalInfo.spouseInfo.city} />
+            )}
+            {formData.personalInfo.spouseInfo.province && (
+              <CopyableField label="Province" value={formData.personalInfo.spouseInfo.province} />
+            )}
+            {formData.personalInfo.spouseInfo.postalCode && (
+              <CopyableField label="Postal Code" value={formData.personalInfo.spouseInfo.postalCode} />
+            )}
             {formData.personalInfo.spouseInfo.dateOfMarriageOrSeparation && (
               <CopyableField label="Date of Marriage / Separation" value={formatDate(formData.personalInfo.spouseInfo.dateOfMarriageOrSeparation)} />
+            )}
+            {formData.personalInfo.spouseInfo.marriageInTaxYear && (
+              <CopyableField label="Married in Tax Year" value="Yes" />
+            )}
+            {formData.personalInfo.spouseInfo.separationInTaxYear && (
+              <CopyableField label="Separated in Tax Year" value="Yes" />
+            )}
+            {formData.personalInfo.spouseInfo.receivesSpousePayment && (
+              <CopyableField label="Receives Spousal Support Payment" value="Yes" />
+            )}
+            {formData.personalInfo.spouseInfo.supportPaymentAmount > 0 && (
+              <CopyableField label="Spousal Support Payment Amount" value={formatCurrency(formData.personalInfo.spouseInfo.supportPaymentAmount)} />
             )}
           </div>
         </T1CRASection>
@@ -354,17 +379,6 @@ export function T1CRAReadyForm({
             <span className="text-lg font-bold text-primary">{formatCurrency(totalMedical)}</span>
           </div>
         </div>
-        <QuestionDocuments
-          sectionKey="MEDICAL_EXPENSES"
-          sectionTitle="Medical Expense Documents"
-          documents={documents}
-          requiredDocuments={['Medical Receipts', 'Pharmacy Receipts']}
-          onApprove={onApproveDoc}
-          onRequestReupload={onRequestReupload}
-          onRequestMissing={onRequestMissing}
-          onView={onViewDoc}
-          canEdit={canEdit}
-        />
       </T1CRASection>
 
       {/* Q3: Charitable Donations */}
@@ -575,6 +589,18 @@ export function T1CRAReadyForm({
                 <Separator />
                 <h4 className="font-semibold text-base">General Business Income</h4>
 
+                {/* Business Info */}
+                <div>
+                  <h5 className="font-medium text-sm text-muted-foreground mb-3">Business Info</h5>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <CopyableField label="Client Name" value={formData.selfEmployment.generalBusiness.clientName || 'N/A'} />
+                    <CopyableField label="Business Name" value={formData.selfEmployment.generalBusiness.businessName || 'N/A'} />
+                    <CopyableField label="HST Number" value={formData.selfEmployment.generalBusiness.hstNumber || 'N/A'} />
+                    <CopyableField label="HST Access Code" value={formData.selfEmployment.generalBusiness.hstAccessCode || 'N/A'} />
+                    <CopyableField label="HST Filing Period" value={formData.selfEmployment.generalBusiness.hstFilingPeriod || 'N/A'} />
+                  </div>
+                </div>
+
                 {/* Income & Cost of Goods Sold */}
                 <div>
                   <h5 className="font-medium text-sm text-muted-foreground mb-3">Income & Cost of Goods Sold</h5>
@@ -584,9 +610,12 @@ export function T1CRAReadyForm({
                     <CopyableField label="Net Income" value={formatCurrency(formData.selfEmployment.generalBusiness.grossIncome)} className="font-medium" />
                     <CopyableField label="Opening Inventory" value={formatCurrency(formData.selfEmployment.generalBusiness.openingInventory)} />
                     <CopyableField label="Purchases During Year" value={formatCurrency(formData.selfEmployment.generalBusiness.purchasesDuringYear)} />
+                    <CopyableField label="Purchases During Year HST" value={formatCurrency(formData.selfEmployment.generalBusiness.purchasesDuringYearHst)} />
                     <CopyableField label="Subcontracts" value={formatCurrency(formData.selfEmployment.generalBusiness.subcontracts)} />
+                    <CopyableField label="Subcontracts HST" value={formatCurrency(formData.selfEmployment.generalBusiness.subcontractsHst)} />
                     <CopyableField label="Direct Wage Costs" value={formatCurrency(formData.selfEmployment.generalBusiness.directWageCosts)} />
                     <CopyableField label="Other Costs" value={formatCurrency(formData.selfEmployment.generalBusiness.otherCosts)} />
+                    <CopyableField label="Other Costs HST" value={formatCurrency(formData.selfEmployment.generalBusiness.otherCostsHst)} />
                     <CopyableField label="Purchase Returns" value={formatCurrency(formData.selfEmployment.generalBusiness.purchaseReturns)} />
                   </div>
                 </div>
@@ -595,28 +624,42 @@ export function T1CRAReadyForm({
                 <div>
                   <h5 className="font-medium text-sm text-muted-foreground mb-3">Operating Expenses</h5>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    <CopyableField label="Advertising" value={formatCurrency(formData.selfEmployment.generalBusiness.advertising)} />
-                    <CopyableField label="Meals & Entertainment" value={formatCurrency(formData.selfEmployment.generalBusiness.mealsEntertainment)} />
-                    <CopyableField label="Bad Debts" value={formatCurrency(formData.selfEmployment.generalBusiness.badDebts)} />
-                    <CopyableField label="Insurance" value={formatCurrency(formData.selfEmployment.generalBusiness.insurance)} />
-                    <CopyableField label="Interest" value={formatCurrency(formData.selfEmployment.generalBusiness.interest)} />
-                    <CopyableField label="Fees, Licenses & Dues" value={formatCurrency(formData.selfEmployment.generalBusiness.feesLicensesDues)} />
-                    <CopyableField label="Office Expenses" value={formatCurrency(formData.selfEmployment.generalBusiness.officeExpenses)} />
-                    <CopyableField label="Supplies" value={formatCurrency(formData.selfEmployment.generalBusiness.supplies)} />
-                    <CopyableField label="Legal & Accounting Fees" value={formatCurrency(formData.selfEmployment.generalBusiness.legalAccountingFees)} />
-                    <CopyableField label="Management & Administration" value={formatCurrency(formData.selfEmployment.generalBusiness.managementAdministration)} />
-                    <CopyableField label="Office Rent" value={formatCurrency(formData.selfEmployment.generalBusiness.officeRent)} />
-                    <CopyableField label="Maintenance & Repairs" value={formatCurrency(formData.selfEmployment.generalBusiness.maintenanceRepairs)} />
-                    <CopyableField label="Salaries, Wages & Benefits" value={formatCurrency(formData.selfEmployment.generalBusiness.salariesWagesBenefits)} />
-                    <CopyableField label="Property Tax" value={formatCurrency(formData.selfEmployment.generalBusiness.propertyTax)} />
-                    <CopyableField label="Travel" value={formatCurrency(formData.selfEmployment.generalBusiness.travel)} />
-                    <CopyableField label="Telephone & Utilities" value={formatCurrency(formData.selfEmployment.generalBusiness.telephoneUtilities)} />
-                    <CopyableField label="Fuel Costs (Excl. Vehicle)" value={formatCurrency(formData.selfEmployment.generalBusiness.fuelCosts)} />
-                    <CopyableField label="Delivery / Freight / Express" value={formatCurrency(formData.selfEmployment.generalBusiness.deliveryFreightExpress)} />
+                    {([
+                      ['Advertising', 'advertising'],
+                      ['Meals & Entertainment', 'mealsEntertainment'],
+                      ['Bad Debts', 'badDebts'],
+                      ['Insurance', 'insurance'],
+                      ['Interest', 'interest'],
+                      ['Fees, Licenses & Dues', 'feesLicensesDues'],
+                      ['Office Expenses', 'officeExpenses'],
+                      ['Supplies', 'supplies'],
+                      ['Legal & Accounting Fees', 'legalAccountingFees'],
+                      ['Management & Administration', 'managementAdministration'],
+                      ['Office Rent', 'officeRent'],
+                      ['Maintenance & Repairs', 'maintenanceRepairs'],
+                      ['Salaries, Wages & Benefits', 'salariesWagesBenefits'],
+                      ['Property Tax', 'propertyTax'],
+                      ['Travel', 'travel'],
+                      ['Telephone & Utilities', 'telephoneUtilities'],
+                      ['Fuel Costs (Excl. Vehicle)', 'fuelCosts'],
+                      ['Delivery / Freight / Express', 'deliveryFreightExpress'],
+                    ] as const).map(([label, key]) => (
+                      <Fragment key={key}>
+                        <CopyableField label={label} value={formatCurrency(formData.selfEmployment.generalBusiness[key])} />
+                        <CopyableField label={`${label} HST`} value={formatCurrency(formData.selfEmployment.generalBusiness.businessExpenseHst?.[key])} />
+                      </Fragment>
+                    ))}
                     <CopyableField label="Other Expense 1" value={formatCurrency(formData.selfEmployment.generalBusiness.otherExpense1)} />
                     <CopyableField label="Other Expense 2" value={formatCurrency(formData.selfEmployment.generalBusiness.otherExpense2)} />
                     <CopyableField label="Other Expense 3" value={formatCurrency(formData.selfEmployment.generalBusiness.otherExpense3)} />
                   </div>
+                  {formData.selfEmployment.generalBusiness.otherExpenses?.length > 0 && (
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mt-3">
+                      {formData.selfEmployment.generalBusiness.otherExpenses.map((exp, i) => (
+                        <CopyableField key={i} label={exp.name || `Other Expense (extra) ${i + 1}`} value={formatCurrency(exp.amount)} />
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Home Office */}
@@ -635,6 +678,13 @@ export function T1CRAReadyForm({
                     <CopyableField label="Home Other Expense 1" value={formatCurrency(formData.selfEmployment.generalBusiness.homeOtherExpense1)} />
                     <CopyableField label="Home Other Expense 2" value={formatCurrency(formData.selfEmployment.generalBusiness.homeOtherExpense2)} />
                   </div>
+                  {formData.selfEmployment.generalBusiness.homeOtherExpenses?.length > 0 && (
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mt-3">
+                      {formData.selfEmployment.generalBusiness.homeOtherExpenses.map((exp, i) => (
+                        <CopyableField key={i} label={exp.name || `Home Other Expense (extra) ${i + 1}`} value={formatCurrency(exp.amount)} />
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Vehicle */}
@@ -651,6 +701,13 @@ export function T1CRAReadyForm({
                     <CopyableField label="Vehicle Other Expense" value={formatCurrency(formData.selfEmployment.generalBusiness.vehicleOtherExpense)} />
                     <CopyableField label="Leasing / Finance Payments" value={formatCurrency(formData.selfEmployment.generalBusiness.leasingFinancePayments)} />
                   </div>
+                  {formData.selfEmployment.generalBusiness.vehicleOtherExpenses?.length > 0 && (
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mt-3">
+                      {formData.selfEmployment.generalBusiness.vehicleOtherExpenses.map((exp, i) => (
+                        <CopyableField key={i} label={exp.name || `Vehicle Other Expense (extra) ${i + 1}`} value={formatCurrency(exp.amount)} />
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Summary */}
@@ -660,6 +717,11 @@ export function T1CRAReadyForm({
                     <CopyableField label="Total Expenses" value={formatCurrency(formData.selfEmployment.generalBusiness.totalExpenses)} className="font-medium" />
                     <CopyableField label="Net Income" value={formatCurrency(formData.selfEmployment.generalBusiness.netIncome)} className="font-semibold" />
                   </div>
+                  {formData.selfEmployment.generalBusiness.notes && (
+                    <div className="mt-3">
+                      <CopyableField label="Notes" value={formData.selfEmployment.generalBusiness.notes} />
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -691,10 +753,39 @@ export function T1CRAReadyForm({
                       {(rent.coOwnerPartner1 || rent.coOwnerPartner2 || rent.coOwnerPartner3) && (
                         <div>
                           <h6 className="font-medium text-sm text-muted-foreground mb-3">Co-owners</h6>
-                          <div className="grid gap-3 sm:grid-cols-3">
-                            {rent.coOwnerPartner1 && <CopyableField label="Co-owner 1" value={rent.coOwnerPartner1} />}
-                            {rent.coOwnerPartner2 && <CopyableField label="Co-owner 2" value={rent.coOwnerPartner2} />}
-                            {rent.coOwnerPartner3 && <CopyableField label="Co-owner 3" value={rent.coOwnerPartner3} />}
+                          <div className="space-y-4">
+                            {([
+                              [1, rent.coOwnerPartner1],
+                              [2, rent.coOwnerPartner2],
+                              [3, rent.coOwnerPartner3],
+                            ] as const).map(([n, name]) => {
+                              if (!name) return null;
+                              const docs = formData.uploadedDocuments || {};
+                              const sin = docs[`rental_coowner${n}_sin`];
+                              const dob = docs[`rental_coowner${n}_dob`];
+                              const street = docs[`rental_coowner${n}_street`];
+                              const city = docs[`rental_coowner${n}_city`];
+                              const province = docs[`rental_coowner${n}_province`];
+                              const postal = docs[`rental_coowner${n}_postal`];
+                              const hasExtra = sin || dob || street || city || province || postal;
+                              return (
+                                <div key={n}>
+                                  <div className="grid gap-3 sm:grid-cols-3">
+                                    <CopyableField label={`Co-owner ${n}`} value={name} />
+                                    {sin && <CopyableField label="SIN" value={sin} />}
+                                    {dob && <CopyableField label="Date of Birth" value={formatDate(dob)} />}
+                                  </div>
+                                  {hasExtra && (street || city || province || postal) && (
+                                    <div className="grid gap-3 sm:grid-cols-3 mt-3">
+                                      {street && <CopyableField label="Street Address" value={street} />}
+                                      {city && <CopyableField label="City" value={city} />}
+                                      {province && <CopyableField label="Province" value={province} />}
+                                      {postal && <CopyableField label="Postal Code" value={postal} />}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
@@ -795,6 +886,7 @@ export function T1CRAReadyForm({
                 </div>
                 <CopyableField label="Purchase Date" value={formatDate(ps.purchaseDate)} />
                 <CopyableField label="Sell Date" value={formatDate(ps.sellDate)} />
+                <CopyableField label="Purchase & Sell Expenses" value={formatCurrency(ps.purchaseSellExpenses)} />
                 <CopyableField label="Capital Gain Earned" value={formatCurrency(ps.capitalGainEarned)} className="font-semibold" />
               </div>
               <Separator />
@@ -844,6 +936,7 @@ export function T1CRAReadyForm({
                 </div>
                 <CopyableField label="Purchase Date" value={formatDate(ps.purchaseDate)} />
                 <CopyableField label="Sell Date" value={formatDate(ps.sellDate)} />
+                <CopyableField label="Purchase & Sell Expenses" value={formatCurrency(ps.purchaseSellExpenses)} />
                 <CopyableField label="Capital Gain Earned" value={formatCurrency(ps.capitalGainEarned)} className="font-semibold" />
               </div>
               <Separator />

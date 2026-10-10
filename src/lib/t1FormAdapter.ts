@@ -348,7 +348,16 @@ export function convertApiDataToFormData(t1Data: any) {
     dateOfBirth: safeValue(spouseSrc.dateOfBirth),
     email: safeValue(spouseSrc.email),
     phoneNumber: safeValue(spouseSrc.phoneNumber),
+    isCanadianCitizen: spouseSrc.isCanadianCitizen === true,
     dateOfMarriageOrSeparation: safeValue(spouseSrc.dateOfMarriageOrSeparation),
+    street: safeValue(spouseSrc.street),
+    city: safeValue(spouseSrc.city),
+    province: safeValue(spouseSrc.province),
+    postalCode: safeValue(spouseSrc.postalCode),
+    separationInTaxYear: spouseSrc.separationInTaxYear === true,
+    marriageInTaxYear: spouseSrc.marriageInTaxYear === true,
+    receivesSpousePayment: spouseSrc.receivesSpousePayment === true,
+    supportPaymentAmount: parseFloat(spouseSrc.supportPaymentAmount) || 0,
     netIncome: parseFloat(spouseSrc.netIncome) || 0
   } : null;
   
@@ -489,5 +498,9 @@ export function convertApiDataToFormData(t1Data: any) {
       : (parseBool(answersMap.hasOtherIncome) && answersMap.otherIncomeDescription
           ? [{ description: answersMap.otherIncomeDescription, amount: 0 }]
           : []),
+    // Per-document filename map, repurposed by the mobile app to also carry
+    // rental co-owner extra details under composite keys like
+    // "rental_coowner1_sin" / "_dob" / "_street" / "_city" / "_province" / "_postal".
+    uploadedDocuments: answersMap.uploadedDocuments || {},
   };
 }

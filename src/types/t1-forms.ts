@@ -166,15 +166,21 @@ export interface T1GeneralBusiness {
   businessName: string;
   businessType?: string;
   businessNumber?: string;
+  hstNumber?: string;
+  hstAccessCode?: string;
+  hstFilingPeriod?: string;
   // Income & COGS
   salesCommissionsFees: number;
   minusHstCollected: number;
   grossIncome: number;
   openingInventory: number;
   purchasesDuringYear: number;
+  purchasesDuringYearHst?: number;
   subcontracts: number;
+  subcontractsHst?: number;
   directWageCosts: number;
   otherCosts: number;
+  otherCostsHst?: number;
   purchaseReturns: number;
   // Operating Expenses
   advertising: number;
@@ -198,6 +204,9 @@ export interface T1GeneralBusiness {
   otherExpense1: number;
   otherExpense2: number;
   otherExpense3: number;
+  // HST per operating-expense line, keyed by the expense field name above
+  // (e.g. businessExpenseHst.advertising, businessExpenseHst.mealsEntertainment)
+  businessExpenseHst?: Record<string, number>;
   // Home Office
   areaOfHomeForBusiness: string;
   totalAreaOfHome: string;
