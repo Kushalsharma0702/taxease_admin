@@ -2058,6 +2058,7 @@ export default function ClientDetail() {
                     note: taxFileForm.note || undefined,
                     t1_return: t1File || undefined,
                     t183_form: t183File || undefined,
+                    filing_id: t1FormData?.filing_id || undefined,
                   });
                   const updated = await api.getTaxFiles(client.id).catch(() => []);
                   setTaxFiles(Array.isArray(updated) ? updated : []);

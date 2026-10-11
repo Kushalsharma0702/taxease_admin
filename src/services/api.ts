@@ -528,12 +528,14 @@ class ApiService {
     note?: string;
     t1_return?: File;
     t183_form?: File;
+    filing_id?: string;
   }) {
     const formData = new FormData();
     formData.append('client_id', data.client_id);
     formData.append('refund_or_owing', data.refund_or_owing);
     formData.append('amount', String(data.amount));
     if (data.note) formData.append('note', data.note);
+    if (data.filing_id) formData.append('filing_id', data.filing_id);
     if (data.t1_return) formData.append('t1_return', data.t1_return);
     if (data.t183_form) formData.append('t183_form', data.t183_form);
     return this.request<{ id: string; filingId: string; status: string }>('/tax-files', {
