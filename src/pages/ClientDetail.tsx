@@ -155,12 +155,31 @@ export default function ClientDetail() {
   // Build questionnaire from T1 answers
   const buildQuestionnaire = (fullT1Form: any, clientId: string) => {
     if (!fullT1Form?.answers?.length) return;
+    // field_key paths look like "selfEmployment.generalBusiness.advertising" or
+    // "medicalExpenses[0].patientName" — split on dots/brackets/array-indices AND
+    // camelCase word boundaries before title-casing, or labels render as
+    // resource-key-looking junk ("Selfemployment.Generalbusiness.Advertising")
+    // instead of readable text.
+    const humanizeFieldKey = (key: string): string =>
+      key
+        .replace(/\[\d+\]/g, '') // drop array indices
+        .split(/[._]/)
+        .filter(Boolean)
+        .map((part) =>
+          part
+            .replace(/([a-z0-9])([A-Z])/g, '$1 $2') // camelCase -> words
+            .replace(/\b\w/g, (c) => c.toUpperCase())
+        )
+        .join(' - ');
     const questions = fullT1Form.answers.map((a: any, i: number) => {
       const rawValue = a.value != null ? String(a.value) : '';
-      const category = a.field_key?.split('.')?.[0]?.replace(/_/g, ' ')?.replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'General';
+      const firstSegment = (a.field_key?.split(/[._[]/)?.[0] || '').trim();
+      const category = firstSegment
+        ? firstSegment.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/\b\w/g, (c: string) => c.toUpperCase())
+        : 'General';
       return {
         id: a.id || `q-${i}`,
-        question: a.field_key?.replace(/_/g, ' ')?.replace(/\b\w/g, (c: string) => c.toUpperCase()) || `Field ${i + 1}`,
+        question: a.field_key ? humanizeFieldKey(a.field_key) : `Field ${i + 1}`,
         answer: rawValue,
         category,
         section: category,

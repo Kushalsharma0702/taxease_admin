@@ -188,6 +188,51 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
 
   yPosition = (doc as any).lastAutoTable?.finalY + 10 || yPosition + 30;
 
+  // ============ SPOUSE INFORMATION ============
+  if (pi?.spouseInfo) {
+    const sp = pi.spouseInfo;
+    checkNewPage(40);
+    addSectionHeader('Spouse Information', true);
+    const spouseData = [
+      ['Full Name', `${sp.firstName || ''} ${sp.middleName || ''} ${sp.lastName || ''}`.trim() || 'N/A'],
+      ['SIN', sp.sin || 'N/A'],
+      ['Date of Birth', sp.dateOfBirth || 'N/A'],
+      ['Email', sp.email || 'N/A'],
+      ['Phone', sp.phoneNumber || 'N/A'],
+      ['Address', sp.street ? `${sp.street}, ${sp.city || ''}, ${sp.province || ''} ${sp.postalCode || ''}` : 'N/A'],
+      ['Date of Marriage/Separation', sp.dateOfMarriageOrSeparation || 'N/A'],
+      ...(sp.receivesSpousePayment ? [['Spousal Support Payment', formatCurrency(sp.supportPaymentAmount || 0)]] : []),
+    ];
+    autoTable(doc, {
+      startY: yPosition,
+      body: spouseData,
+      theme: 'plain',
+      styles: { fontSize: 9, cellPadding: 2 },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } },
+    } as any);
+    yPosition = (doc as any).lastAutoTable?.finalY + 10 || yPosition + 30;
+  }
+
+  // ============ CHILDREN / DEPENDENTS ============
+  if (pi?.children && pi.children.length > 0) {
+    checkNewPage(30);
+    addSectionHeader('Children / Dependents', true);
+    const childRows = pi.children.map((c: any) => [
+      `${c.firstName || ''} ${c.lastName || ''}`.trim(),
+      c.dateOfBirth || 'N/A',
+      c.sin || 'N/A',
+    ]);
+    autoTable(doc, {
+      startY: yPosition,
+      head: [['Name', 'Date of Birth', 'SIN']],
+      body: childRows,
+      theme: 'grid',
+      headStyles: { fillColor: [100, 100, 100], fontSize: 8 },
+      styles: { fontSize: 8 },
+    } as any);
+    yPosition = (doc as any).lastAutoTable?.finalY + 10 || yPosition + 30;
+  }
+
   // ============ QUESTIONNAIRE ANSWERS (RAW) ============
   // Only rendered as a last resort: `question` here is a prettified field_key
   // ("MedicalExpenses.0.PatientName"), not a real question title, so it is
@@ -419,8 +464,36 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
     yPosition += 5;
   }
 
+  if (t1FormData?.movingExpenseForSpouse && t1FormData.movingExpensesSpouse) {
+    const mes = t1FormData.movingExpensesSpouse;
+    checkNewPage(50);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Moving Expenses — Spouse', 16, yPosition);
+    yPosition += 5;
+
+    const spouseMoveData = [
+      ['Old Address', formatAddress(mes.oldAddress)],
+      ['New Address', formatAddress(mes.newAddress)],
+      ['Date of Travel', mes.dateOfTravel || 'N/A'],
+      ['Air Tickets', formatCurrency(mes.airTicketsCost || 0)],
+      ['Movers & Packers', formatCurrency(mes.moversPackersCost || 0)],
+      ['Meals & Other', formatCurrency(mes.travelMealsCost || 0)],
+      ['Other Costs', formatCurrency(mes.otherMovingCosts || 0)],
+      ['Total Moving Cost', formatCurrency(mes.totalMovingCost || 0)],
+    ];
+    autoTable(doc, {
+      startY: yPosition,
+      body: spouseMoveData,
+      theme: 'plain',
+      styles: { fontSize: 8, cellPadding: 2 },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 } },
+    } as any);
+    yPosition = (doc as any).lastAutoTable?.finalY + 5 || yPosition + 20;
+  }
+
   // Q5: Self-Employment
-  const hasSelfEmployment = t1FormData?.selfEmployment && (t1FormData.selfEmployment.hasUberSkipDoorDash || t1FormData.selfEmployment.hasGeneralBusiness);
+  const hasSelfEmployment = t1FormData?.selfEmployment && (t1FormData.selfEmployment.hasUberSkipDoorDash || t1FormData.selfEmployment.hasGeneralBusiness || t1FormData.selfEmployment.hasRentalIncome || t1FormData.selfEmployment.rentalIncome?.length > 0);
   addSectionHeader('Q5: Self-Employment Income', hasSelfEmployment);
   
   if (hasSelfEmployment && t1FormData.selfEmployment) {
@@ -450,29 +523,111 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
     }
     
     if (se.hasGeneralBusiness && se.generalBusiness) {
+      const gb = se.generalBusiness;
+      checkNewPage(60);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
       doc.text('General Business Income', 16, yPosition);
       yPosition += 5;
-      
-      const bizData = [
-        ['Business Name', se.generalBusiness.businessName],
-        ['Gross Income', formatCurrency(se.generalBusiness.grossIncome || 0)],
-        ['Total Expenses', formatCurrency(se.generalBusiness.totalExpenses || 0)],
-        ['Net Income', formatCurrency(se.generalBusiness.netIncome || 0)],
-      ];
 
+      const bizData = [
+        ['Business Name', gb.businessName || 'N/A'],
+        ['HST Number', gb.hstNumber || 'N/A'],
+        ['Sales / Commissions / Fees', formatCurrency(gb.salesCommissionsFees || 0)],
+        ['Minus HST Collected', formatCurrency(gb.minusHstCollected || 0)],
+        ['Gross Income', formatCurrency(gb.grossIncome || 0)],
+        ['Total Expenses', formatCurrency(gb.totalExpenses || 0)],
+        ['Net Income', formatCurrency(gb.netIncome || 0)],
+      ];
       autoTable(doc, {
         startY: yPosition,
         body: bizData,
         theme: 'plain',
         styles: { fontSize: 8, cellPadding: 2 },
-        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 } },
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } },
       } as any);
-
       yPosition = (doc as any).lastAutoTable?.finalY + 5 || yPosition + 15;
+
+      const expenseLines: [string, string][] = [
+        ['Advertising', 'advertising'], ['Meals & Entertainment', 'mealsEntertainment'],
+        ['Bad Debts', 'badDebts'], ['Insurance', 'insurance'], ['Interest', 'interest'],
+        ['Fees, Licenses & Dues', 'feesLicensesDues'], ['Office Expenses', 'officeExpenses'],
+        ['Supplies', 'supplies'], ['Legal & Accounting Fees', 'legalAccountingFees'],
+        ['Management & Administration', 'managementAdministration'], ['Office Rent', 'officeRent'],
+        ['Maintenance & Repairs', 'maintenanceRepairs'], ['Salaries, Wages & Benefits', 'salariesWagesBenefits'],
+        ['Property Tax', 'propertyTax'], ['Travel', 'travel'], ['Telephone & Utilities', 'telephoneUtilities'],
+        ['Fuel Costs', 'fuelCosts'], ['Delivery / Freight / Express', 'deliveryFreightExpress'],
+      ];
+      const expenseRows = expenseLines
+        .filter(([, key]) => (gb[key] || 0) > 0 || (gb.businessExpenseHst?.[key] || 0) > 0)
+        .map(([label, key]) => [label, formatCurrency(gb[key] || 0), formatCurrency(gb.businessExpenseHst?.[key] || 0)]);
+      if (expenseRows.length > 0) {
+        checkNewPage(20 + expenseRows.length * 6);
+        autoTable(doc, {
+          startY: yPosition,
+          head: [['Operating Expense', 'Amount', 'HST']],
+          body: expenseRows,
+          theme: 'grid',
+          headStyles: { fillColor: [100, 100, 100], fontSize: 8 },
+          styles: { fontSize: 8 },
+        } as any);
+        yPosition = (doc as any).lastAutoTable?.finalY + 5 || yPosition + 15;
+      }
     }
-    
+
+    if (se.rentalIncome && se.rentalIncome.length > 0) {
+      se.rentalIncome.forEach((rent: any, idx: number) => {
+        checkNewPage(50);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Rental Property ${idx + 1}${rent.propertyAddress ? ': ' + rent.propertyAddress : ''}`, 16, yPosition);
+        yPosition += 5;
+
+        const rentData = [
+          ['Gross Rental Income', formatCurrency(rent.grossRentalIncome || 0)],
+          ['Property Taxes', formatCurrency(rent.propertyTaxes || 0)],
+          ['Insurance', formatCurrency(rent.insurance ?? rent.houseInsurance ?? 0)],
+          ['Mortgage Interest', formatCurrency(rent.mortgageInterest || 0)],
+          ['Repairs & Maintenance', formatCurrency(rent.repairsAndMaintenance ?? rent.repairAndMaintenance ?? 0)],
+          ['Utilities', formatCurrency(rent.utilities || 0)],
+          ['Management Fees', formatCurrency(rent.managementFees ?? rent.managementAdminFees ?? 0)],
+          ['Total Expenses', formatCurrency(rent.totalExpenses || 0)],
+          ['Net Rental Income', formatCurrency(rent.netRentalIncome || 0)],
+        ];
+        autoTable(doc, {
+          startY: yPosition,
+          body: rentData,
+          theme: 'plain',
+          styles: { fontSize: 8, cellPadding: 2 },
+          columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } },
+        } as any);
+        yPosition = (doc as any).lastAutoTable?.finalY + 3 || yPosition + 15;
+
+        const coOwners = [1, 2, 3]
+          .map((n) => ({ n, name: rent[`coOwnerPartner${n}`] }))
+          .filter((c) => c.name);
+        if (coOwners.length > 0) {
+          const docs = t1FormData.uploadedDocuments || {};
+          const coOwnerRows = coOwners.map(({ n, name }) => [
+            name,
+            docs[`rental_coowner${n}_sin`] || 'N/A',
+            docs[`rental_coowner${n}_dob`] || 'N/A',
+            [docs[`rental_coowner${n}_street`], docs[`rental_coowner${n}_city`], docs[`rental_coowner${n}_province`], docs[`rental_coowner${n}_postal`]]
+              .filter(Boolean).join(', ') || 'N/A',
+          ]);
+          autoTable(doc, {
+            startY: yPosition,
+            head: [['Co-owner', 'SIN', 'Date of Birth', 'Address']],
+            body: coOwnerRows,
+            theme: 'grid',
+            headStyles: { fillColor: [100, 100, 100], fontSize: 8 },
+            styles: { fontSize: 8 },
+          } as any);
+          yPosition = (doc as any).lastAutoTable?.finalY + 5 || yPosition + 15;
+        }
+      });
+    }
+
     // Add documents
     const seDocs = getDocsForSection('SELF_EMPLOYMENT', documents);
     if (seDocs.length > 0) {
@@ -488,28 +643,43 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
   }
 
   // Q6: Work From Home
-  const hasWFH = t1FormData?.workFromHome?.hasT2200;
+  const hasWFH = t1FormData?.hasWorkFromHomeExpense || t1FormData?.workFromHome || t1FormData?.wfhIndividual || t1FormData?.wfhSpouse;
   addSectionHeader('Q6: Work From Home Expenses', hasWFH);
-  
-  if (hasWFH && t1FormData.workFromHome) {
-    const wfh = t1FormData.workFromHome;
-    const wfhData = [
-      ['Employer Name', wfh.employerName],
-      ['Work Area', `${wfh.workArea} sq.ft (${wfh.workAreaPercentage}%)`],
-      ['Total Home Area', `${wfh.totalHomeArea} sq.ft`],
-      ['Claimable Amount', formatCurrency(wfh.claimableAmount)],
-    ];
 
-    autoTable(doc, {
-      startY: yPosition,
-      body: wfhData,
-      theme: 'plain',
-      styles: { fontSize: 8, cellPadding: 2 },
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 } },
-    } as any);
+  if (hasWFH) {
+    const wfhEntries: [string, any][] = [];
+    if (t1FormData.workFromHomeForIndividual && t1FormData.wfhIndividual) wfhEntries.push(['Individual', t1FormData.wfhIndividual]);
+    if (t1FormData.workFromHomeForSpouse && t1FormData.wfhSpouse) wfhEntries.push(['Spouse', t1FormData.wfhSpouse]);
+    if (wfhEntries.length === 0 && t1FormData.workFromHome) wfhEntries.push(['Work From Home', t1FormData.workFromHome]);
 
-    yPosition = (doc as any).lastAutoTable?.finalY + 5 || yPosition + 15;
-    
+    wfhEntries.forEach(([label, wfh]) => {
+      checkNewPage(45);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, 16, yPosition);
+      yPosition += 5;
+      const wfhData = [
+        ['Total Home Area', `${wfh.totalHomeArea || 0} sq.ft`],
+        ['Work Area', `${wfh.workArea || 0} sq.ft`],
+        ['Rent Expense', formatCurrency(wfh.rentExpense || 0)],
+        ['Mortgage Interest', formatCurrency(wfh.mortgageInterest || 0)],
+        ['Internet Expense', formatCurrency(wfh.internetExpense || 0)],
+        ['Utilities', formatCurrency(wfh.utilities || 0)],
+        ['Water', formatCurrency(wfh.waterExpense || 0)],
+        ['Heat', formatCurrency(wfh.heatExpense || 0)],
+        ['Home Insurance', formatCurrency(wfh.homeInsurance || 0)],
+        ['Claimable Amount', formatCurrency(wfh.claimableAmount || 0)],
+      ];
+      autoTable(doc, {
+        startY: yPosition,
+        body: wfhData,
+        theme: 'plain',
+        styles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 } },
+      } as any);
+      yPosition = (doc as any).lastAutoTable?.finalY + 5 || yPosition + 15;
+    });
+
     const wfhDocs = getDocsForSection('WORK_FROM_HOME', documents);
     if (wfhDocs.length > 0) {
       doc.setFontSize(9);
@@ -626,6 +796,174 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
       });
     }
     yPosition += 5;
+  }
+
+  // Q10: Professional Dues
+  const hasProfDues = t1FormData?.professionalDues && t1FormData.professionalDues.length > 0;
+  addSectionHeader('Q10: Professional Dues', hasProfDues);
+  if (hasProfDues) {
+    const profRows = t1FormData.professionalDues.map((p: any) => [
+      p.memberName || p.name || 'N/A',
+      p.organizationName || p.organization || 'N/A',
+      formatCurrency(p.amountPaid || 0),
+    ]);
+    autoTable(doc, {
+      startY: yPosition,
+      head: [['Member Name', 'Organization', 'Amount']],
+      body: profRows,
+      theme: 'grid',
+      headStyles: { fillColor: [100, 100, 100], fontSize: 8 },
+      styles: { fontSize: 8 },
+    } as any);
+    yPosition = (doc as any).lastAutoTable?.finalY + 10 || yPosition + 25;
+  }
+
+  // Q11: RRSP/FHSA
+  addSectionHeader('Q11: RRSP/FHSA Contributions', !!t1FormData?.hasRrspFhsaInvestment);
+
+  // Q12: Disability Tax Credit
+  const hasDisability = t1FormData?.disabilityTaxCredit && t1FormData.disabilityTaxCredit.length > 0;
+  addSectionHeader('Q12: Disability Tax Credit', hasDisability);
+  if (hasDisability) {
+    const dtcRows = t1FormData.disabilityTaxCredit.map((m: any) => [
+      `${m.firstName || ''} ${m.lastName || ''}`.trim() || 'N/A',
+      m.relation || 'N/A',
+      m.approvedYear || 'N/A',
+      [m.fromYear, m.toYear].filter(Boolean).join(' - ') || 'N/A',
+    ]);
+    autoTable(doc, {
+      startY: yPosition,
+      head: [['Name', 'Relation', 'CRA Approval Year', 'Approved Period']],
+      body: dtcRows,
+      theme: 'grid',
+      headStyles: { fillColor: [100, 100, 100], fontSize: 8 },
+      styles: { fontSize: 8 },
+    } as any);
+    yPosition = (doc as any).lastAutoTable?.finalY + 10 || yPosition + 25;
+  }
+
+  // Q13: Capital Gains (Property Sale)
+  const hasCapitalGains = !!t1FormData?.propertySaleLongTerm || !!t1FormData?.propertySaleShortTerm;
+  addSectionHeader('Q13: Capital Gains', hasCapitalGains);
+  if (hasCapitalGains) {
+    [
+      ['Property Sale (Held > 365 days)', t1FormData.propertySaleLongTerm],
+      ['Property Sale (Held < 365 days)', t1FormData.propertySaleShortTerm],
+    ].forEach(([label, ps]: [string, any]) => {
+      if (!ps) return;
+      checkNewPage(35);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, 16, yPosition);
+      yPosition += 5;
+      const psData = [
+        ['Property Address', ps.propertyAddress || 'N/A'],
+        ['Purchase Date', ps.purchaseDate || 'N/A'],
+        ['Sell Date', ps.sellDate || 'N/A'],
+        ['Purchase & Sell Expenses', formatCurrency(ps.purchaseSellExpenses || 0)],
+        ['Capital Gain Earned', formatCurrency(ps.capitalGainEarned || 0)],
+      ];
+      autoTable(doc, {
+        startY: yPosition,
+        body: psData,
+        theme: 'plain',
+        styles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } },
+      } as any);
+      yPosition = (doc as any).lastAutoTable?.finalY + 8 || yPosition + 25;
+    });
+  }
+
+  // Q15: First-Time Filer
+  const hasFirstTimeFiler = !!t1FormData?.firstTimeFilerIndividual || !!t1FormData?.firstTimeFilerSpouse;
+  addSectionHeader('Q15: First-Time Filer', hasFirstTimeFiler);
+  if (hasFirstTimeFiler) {
+    [
+      ['Individual', t1FormData.firstTimeFilerIndividual],
+      ['Spouse', t1FormData.firstTimeFilerSpouse],
+    ].forEach(([label, f]: [string, any]) => {
+      if (!f) return;
+      checkNewPage(30);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, 16, yPosition);
+      yPosition += 5;
+      const ftfData = [
+        ['Date of Landing', f.dateOfLanding || 'N/A'],
+        ['Income Outside Canada (CAD)', formatCurrency(f.incomeOutsideCanada || 0)],
+        ['Back Home Income 2024 (CAD)', formatCurrency(f.backHomeIncome2024 || 0)],
+        ['Back Home Income 2023 (CAD)', formatCurrency(f.backHomeIncome2023 || 0)],
+      ];
+      autoTable(doc, {
+        startY: yPosition,
+        body: ftfData,
+        theme: 'plain',
+        styles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } },
+      } as any);
+      yPosition = (doc as any).lastAutoTable?.finalY + 8 || yPosition + 25;
+    });
+  }
+
+  // Rent or Property Tax (Province Filer)
+  const hasProvinceFiler = t1FormData?.provinceFilerEntries && t1FormData.provinceFilerEntries.length > 0;
+  addSectionHeader('Rent or Property Tax', hasProvinceFiler);
+  if (hasProvinceFiler) {
+    const pfRows = t1FormData.provinceFilerEntries.map((e: any) => [
+      e.province || 'N/A',
+      e.rentOrPropertyTax || 'N/A',
+      e.propertyAddress || 'N/A',
+      formatCurrency(e.amountPaid ?? e.rentOrPropertyTaxAmount ?? 0),
+    ]);
+    autoTable(doc, {
+      startY: yPosition,
+      head: [['Province', 'Rent/Property Tax', 'Address', 'Amount Paid']],
+      body: pfRows,
+      theme: 'grid',
+      headStyles: { fillColor: [100, 100, 100], fontSize: 8 },
+      styles: { fontSize: 8 },
+    } as any);
+    yPosition = (doc as any).lastAutoTable?.finalY + 10 || yPosition + 25;
+  }
+
+  // Other Income
+  const hasOtherIncome = t1FormData?.otherIncome && t1FormData.otherIncome.length > 0;
+  addSectionHeader('Other Income', hasOtherIncome);
+  if (hasOtherIncome) {
+    const oiRows = t1FormData.otherIncome.map((o: any) => [o.description || 'N/A', formatCurrency(o.amount || 0)]);
+    autoTable(doc, {
+      startY: yPosition,
+      head: [['Description', 'Amount']],
+      body: oiRows,
+      theme: 'grid',
+      headStyles: { fillColor: [100, 100, 100], fontSize: 8 },
+      styles: { fontSize: 8 },
+    } as any);
+    yPosition = (doc as any).lastAutoTable?.finalY + 10 || yPosition + 25;
+  }
+
+  // Deceased Return
+  if (t1FormData?.deceasedReturn) {
+    const dr = t1FormData.deceasedReturn;
+    checkNewPage(45);
+    addSectionHeader('Filing for Deceased Person', true);
+    const drData = [
+      ['Name of Deceased', dr.deceasedFullName || 'N/A'],
+      ['Date of Death', dr.dateOfDeath || 'N/A'],
+      ['Deceased SIN', dr.deceasedSin || 'N/A'],
+      ['Mailing Address', dr.deceasedMailingAddress || 'N/A'],
+      ['Legal Representative', dr.legalRepresentativeName || 'N/A'],
+      ['Legal Rep. Contact', dr.legalRepresentativeContactNumber || 'N/A'],
+      ['Legal Rep. Address', dr.legalRepresentativeAddress || 'N/A'],
+    ];
+    autoTable(doc, {
+      startY: yPosition,
+      body: drData,
+      theme: 'plain',
+      styles: { fontSize: 8, cellPadding: 2 },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } },
+    } as any);
+    yPosition = (doc as any).lastAutoTable?.finalY + 10 || yPosition + 25;
   }
 
   // Employment Income Section
