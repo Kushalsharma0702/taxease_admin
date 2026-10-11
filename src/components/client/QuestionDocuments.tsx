@@ -60,6 +60,19 @@ function getDocumentTypeKey(doc: DocType): string {
   return typeof raw === 'string' && raw ? raw : '__default__';
 }
 
+// Human-readable label for what the client declared this document to be
+// (e.g. "Bank Mortgage Statement") — distinct from the raw uploaded filename.
+// Slug-style values (snake_case/lowercase, no spaces) get title-cased; values
+// that already read as a label (e.g. from a named upload card) pass through.
+function getDocumentTypeLabel(doc: DocType): string | null {
+  const key = getDocumentTypeKey(doc);
+  if (key === '__default__' || key.toLowerCase() === 'other') return null;
+  if (/[a-z]/.test(key) && !/\s/.test(key)) {
+    return key.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return key;
+}
+
 const DEFAULT_STATUS_CONFIG = { label: 'Pending Review', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30', icon: '🟡' };
 
 const STATUS_CONFIG: Record<string, { label: string; className: string; icon: string }> = {
@@ -277,6 +290,7 @@ export function QuestionDocuments({
           const config = STATUS_CONFIG[status] || DEFAULT_STATUS_CONFIG;
           const isSuperseded = orderedSectionDocs.length > 1 && !currentDocIdsBySlot.has(doc.id);
           const uploadedDate = getUploadedDate(doc);
+          const typeLabel = getDocumentTypeLabel(doc);
 
           return (
             <div
@@ -299,14 +313,15 @@ export function QuestionDocuments({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium truncate">{doc.name}</p>
+                    <p className="text-sm font-medium truncate">{typeLabel || doc.name}</p>
                     {isSuperseded && (
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 bg-muted text-muted-foreground border-border">
                         Old version — replaced by client
                       </Badge>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground truncate">
+                    {typeLabel && <span className="truncate">{doc.name} • </span>}
                     {doc.fileType?.toUpperCase() || 'PDF'} • v{doc.version} • {uploadedDate ? uploadedDate.toLocaleString() : 'Upload date unknown'}
                   </p>
                 </div>
