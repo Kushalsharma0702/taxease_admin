@@ -675,6 +675,7 @@ class ApiService {
     amount: number;
     method: string;
     note?: string;
+    filing_id?: string;
   }) {
     return this.request<any>('/payments', {
       method: 'POST',
@@ -766,6 +767,7 @@ class ApiService {
     new_status?: string;
     reason?: string;
     filing_year?: number;
+    filing_id?: string;
   }) {
     return this.request<any>('/notifications', {
       method: 'POST',

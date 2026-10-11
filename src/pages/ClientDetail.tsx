@@ -470,6 +470,7 @@ export default function ClientDetail() {
         amount,
         method: paymentMethod,
         note: paymentNote || undefined,
+        filing_id: t1FormData?.filing_id || undefined,
       });
       const updated = await api.getPayments({ client_id: client.id }).catch(() => []);
       setPayments(Array.isArray(updated) ? updated : []);
@@ -511,6 +512,7 @@ export default function ClientDetail() {
         title: 'Payment Requested',
         message: paymentRequestNote,
         amount,
+        filing_id: t1FormData?.filing_id || undefined,
       });
       setPaymentRequestAmount('');
       setPaymentRequestNote('');
@@ -1484,6 +1486,15 @@ export default function ClientDetail() {
                 )}
               </CardHeader>
               <CardContent>
+                {filingStatus === 'payment_request_sent' && (
+                  <div className="flex items-center gap-3 p-4 mb-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10">
+                    <Send className="h-5 w-5 text-yellow-600 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-yellow-700">Payment requested — awaiting response</p>
+                      <p className="text-xs text-muted-foreground">A payment request email was sent to the client. Use "Record Payment" once it's received.</p>
+                    </div>
+                  </div>
+                )}
                 {payments.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                     <CreditCard className="h-12 w-12 mb-4 opacity-50" />
