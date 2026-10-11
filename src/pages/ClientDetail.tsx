@@ -1628,13 +1628,24 @@ export default function ClientDetail() {
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
-                              <Badge variant={taxFile.status === 'approved' ? 'default' : 'outline'}>
-                                {taxFile.status}
+                              <Badge
+                                variant={taxFile.status === 'approved' ? 'default' : taxFile.status === 'changes_requested' ? 'destructive' : 'outline'}
+                              >
+                                {taxFile.status === 'changes_requested' ? 'Changes Requested' : taxFile.status}
                               </Badge>
                               <Badge variant={taxFile.refundOrOwing === 'refund' ? 'default' : 'destructive'}>
                                 {taxFile.refundOrOwing === 'refund' ? 'Refund' : 'Owing'}: {formatCurrency(taxFile.amount)}
                               </Badge>
                             </div>
+                            {taxFile.status === 'changes_requested' && taxFile.clientFeedback && (
+                              <div className="flex items-start gap-2 p-3 mb-2 rounded-lg border border-red-500/30 bg-red-500/10">
+                                <MessageSquare className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="text-sm font-medium text-red-700">Client requested changes</p>
+                                  <p className="text-sm text-muted-foreground">{taxFile.clientFeedback}</p>
+                                </div>
+                              </div>
+                            )}
                             {taxFile.t1ReturnAvailable && (
                               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                                 <FileText className="h-4 w-4" />
