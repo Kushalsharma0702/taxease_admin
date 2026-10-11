@@ -352,21 +352,45 @@ export default function ClientDetail() {
       ...taxFiles.map((t) => t.id),
     ].filter(Boolean);
 
+    const humanizeEventType = (et: string) =>
+      (et || 'event').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
     setIsLoadingAuditLogs(true);
-    api.getAuditLogs({ entity_id: entityIds.join(','), page_size: 100 })
-      .then((data) => {
-        const logsList = (data as any)?.logs || [];
+    Promise.all([
+      api.getAuditLogs({ entity_id: entityIds.join(','), page_size: 100 }),
+      // filing_timeline is a separate table from audit_logs — it's where
+      // client-facing events like "payment request sent" actually get
+      // written, and audit_logs never receives them at all. Merge both so
+      // the tab shows the real trail instead of appearing empty.
+      ...allFilings.map((f: any) =>
+        f.filing_id ? api.getFilingTimeline(f.filing_id).catch(() => ({ events: [] })) : Promise.resolve({ events: [] })
+      ),
+    ])
+      .then(([auditData, ...timelineResults]) => {
+        const logsList = (auditData as any)?.logs || [];
+        const auditEntries = logsList.map((l: any) => ({
+          ...l,
+          performedByName: l.performed_by_name || 'Unknown',
+          entityType: l.entity_type,
+          oldValue: l.old_value,
+          newValue: l.new_value,
+          timestamp: new Date(l.timestamp),
+        }));
+        const timelineEntries = timelineResults.flatMap((t: any) =>
+          (t?.events || []).map((ev: any) => ({
+            id: `ft-${ev.id}`,
+            action: humanizeEventType(ev.event_type),
+            entityType: 'filing',
+            oldValue: null,
+            newValue: ev.description,
+            performedByName: ev.actor_name || (ev.actor_type === 'system' ? 'System' : 'Unknown'),
+            timestamp: new Date(ev.created_at),
+          }))
+        );
         setAuditLogs(
-          logsList
-            .map((l: any) => ({
-              ...l,
-              performedByName: l.performed_by_name || 'Unknown',
-              entityType: l.entity_type,
-              oldValue: l.old_value,
-              newValue: l.new_value,
-              timestamp: new Date(l.timestamp),
-            }))
-            .sort((a: any, b: any) => b.timestamp.getTime() - a.timestamp.getTime())
+          [...auditEntries, ...timelineEntries].sort(
+            (a: any, b: any) => b.timestamp.getTime() - a.timestamp.getTime()
+          )
         );
       })
       .catch((err) => {
