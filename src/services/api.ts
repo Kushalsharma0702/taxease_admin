@@ -770,6 +770,7 @@ class ApiService {
     reason?: string;
     filing_year?: number;
     filing_id?: string;
+    t1_form_id?: string;
   }) {
     return this.request<any>('/notifications', {
       method: 'POST',
@@ -790,6 +791,19 @@ class ApiService {
     q.append('client_id', clientId);
     if (unreadOnly) q.append('unread_only', 'true');
     return this.request<any>(`/notifications?${q.toString()}`);
+  }
+
+  // ─── Notes (/notes) ──────────────────────────────────────────────────────
+
+  async getClientNotes(clientId: string): Promise<any[]> {
+    return this.request<any[]>(`/notes?client_id=${encodeURIComponent(clientId)}`);
+  }
+
+  async createClientNote(data: { client_id: string; content: string; is_client_facing?: boolean }) {
+    return this.request<any>('/notes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
   // ─── Chat — not implemented in local backend ──────────────────────────────

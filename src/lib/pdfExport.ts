@@ -73,6 +73,27 @@ function formatAddress(address: string | { street: string; city: string; provinc
   return `${address.street}, ${address.city}, ${address.province} ${address.postalCode}`;
 }
 
+// Structured addresses are flat sibling fields (e.g. oldAddressStreet,
+// propertyAddressStreet) rather than a nested object, matching
+// T1PersonalInfo's own breakdown — see T1MovingExpenses/T1RentalIncome in
+// types/t1-forms.ts. Prefers the structured fields (accurate even if only
+// city/province were hand-edited after the initial autocomplete search) and
+// falls back to the legacy combined string for forms submitted before the
+// relevant breakdown existed. `prefix` is 'oldAddress'/'newAddress' for
+// Moving Expense, 'propertyAddress' for Rental Income and Capital Gains.
+function formatStructuredAddress(data: Record<string, any>, prefix: string): string {
+  const street = data[`${prefix}Street`];
+  const city = data[`${prefix}City`];
+  const province = data[`${prefix}Province`];
+  if (street || city || province) {
+    const aptSuite = data[`${prefix}AptSuite`];
+    const postalCode = data[`${prefix}PostalCode`];
+    const country = data[`${prefix}Country`];
+    return [street, aptSuite, city, province, postalCode, country].filter(Boolean).join(', ');
+  }
+  return formatAddress(data[prefix]);
+}
+
 export async function exportClientPDF(options: PDFExportOptions): Promise<void> {
   const { client, documents, payments, notes, taxFiles, questionnaire } = options;
   const doc = new jsPDF();
@@ -100,7 +121,10 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
 
   // Helper to add clickable document link
   const addDocumentLink = (document: Document, xPos: number, yPos: number): number => {
-    const statusText = document.status === 'approved' ? '✓' : document.status === 'missing' ? '✗' : '○';
+    // '+'/'x'/'-' not '✓'/'✗'/'○' — same WinAnsi encoding gap as the fixes
+    // above, and this one renders on every single document line in the
+    // export, so it's likely the most visible instance of the bug.
+    const statusText = document.status === 'approved' ? '+' : document.status === 'missing' ? 'x' : '-';
     const statusColor = document.status === 'approved' ? [0, 128, 0] : document.status === 'missing' ? [255, 0, 0] : [128, 128, 128];
     
     doc.setFontSize(9);
@@ -389,7 +413,13 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
       doc.setFontSize(9);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(255, 0, 0);
-      doc.text('⚠ Missing: Charitable Donation Receipts', 16, yPosition);
+      // Not '⚠ Missing: ...' — same WinAnsi encoding gap as the arrow fix
+      // above. jsPDF's default Helvetica has no glyph for U+26A0 and
+      // mis-renders it, which is almost certainly what looked like stray
+      // debug text ("& Missing: ...") in the exported PDF — this is the
+      // intended "flag an uploaded-but-missing document" warning, not a bug
+      // in the annotation itself, just in how the icon rendered.
+      doc.text('Missing: Charitable Donation Receipts', 16, yPosition);
       doc.setTextColor(0, 0, 0);
       yPosition += 5;
     }
@@ -410,10 +440,14 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
     yPosition += 5;
     
     const movingAddressData = [
-      ['Old Address', formatAddress(me.oldAddress)],
-      ['New Address', formatAddress(me.newAddress)],
-      ['Distance Old → New', me.distanceFromOldToNew || 'N/A'],
-      ['Distance New → Office', me.distanceFromNewToOffice || 'N/A'],
+      ['Old Address', formatStructuredAddress(me, 'oldAddress')],
+      ['New Address', formatStructuredAddress(me, 'newAddress')],
+      // "->" not "→" — jsPDF's built-in Helvetica uses WinAnsi encoding,
+      // which has no glyph for U+2192 and silently mangles it (rendered as
+      // "!" in the actual export). Plain ASCII renders correctly in every
+      // PDF viewer without needing a custom embedded font.
+      ['Distance Old -> New', me.distanceFromOldToNew || 'N/A'],
+      ['Distance New -> Office', me.distanceFromNewToOffice || 'N/A'],
     ];
 
     autoTable(doc, {
@@ -473,8 +507,8 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
     yPosition += 5;
 
     const spouseMoveData = [
-      ['Old Address', formatAddress(mes.oldAddress)],
-      ['New Address', formatAddress(mes.newAddress)],
+      ['Old Address', formatStructuredAddress(mes, 'oldAddress')],
+      ['New Address', formatStructuredAddress(mes, 'newAddress')],
       ['Date of Travel', mes.dateOfTravel || 'N/A'],
       ['Air Tickets', formatCurrency(mes.airTicketsCost || 0)],
       ['Movers & Packers', formatCurrency(mes.moversPackersCost || 0)],
@@ -584,6 +618,7 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
         yPosition += 5;
 
         const rentData = [
+          ['Property Address', formatStructuredAddress(rent, 'propertyAddress') || 'N/A'],
           ['Gross Rental Income', formatCurrency(rent.grossRentalIncome || 0)],
           ['Property Taxes', formatCurrency(rent.propertyTaxes || 0)],
           ['Insurance', formatCurrency(rent.insurance ?? rent.houseInsurance ?? 0)],
@@ -857,7 +892,7 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
       doc.text(label, 16, yPosition);
       yPosition += 5;
       const psData = [
-        ['Property Address', ps.propertyAddress || 'N/A'],
+        ['Property Address', formatStructuredAddress(ps, 'propertyAddress') || 'N/A'],
         ['Purchase Date', ps.purchaseDate || 'N/A'],
         ['Sell Date', ps.sellDate || 'N/A'],
         ['Purchase & Sell Expenses', formatCurrency(ps.purchaseSellExpenses || 0)],

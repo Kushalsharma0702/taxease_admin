@@ -38,7 +38,7 @@ import {
 import { T1CRAReadyForm } from '@/components/client/T1CRAReadyForm';
 import { RequestedDocsContext } from '@/components/client/QuestionDocuments';
 import { DocumentActionRow } from '@/components/client/DocumentActionRow';
-import { PIPELINE_STATUS_LABELS, ADMIN_SETTABLE_STATUSES, ClientStatus, PERMISSIONS, Note, Document as DocType, T1Question, DocumentStatus, TaxFile } from '@/types';
+import { PIPELINE_STATUS_LABELS, ADMIN_SETTABLE_STATUSES, FILED_STATUS_HELP, COMPLETED_STATUS_HELP, ClientStatus, PERMISSIONS, Note, Document as DocType, T1Question, DocumentStatus, TaxFile } from '@/types';
 import {
   User,
   Mail,
@@ -202,7 +202,7 @@ export default function ClientDetail() {
       setIsLoadingClient(true);
       try {
         // 1. Fetch client profile + all filings + documents + payments in parallel
-        const [filingData, directFilingsResp, directT1Data, docsResp, paymentsResp, requestedResp, taxFilesResp] = await Promise.all([
+        const [filingData, directFilingsResp, directT1Data, docsResp, paymentsResp, requestedResp, taxFilesResp, notesResp] = await Promise.all([
           api.getFiling(id),
           api.request<any>(`/users/${id}/filings`).catch(() => ({ filings: [], total_filings: 0 })),
           api.getUserT1FormData(id).catch(() => null),
@@ -210,9 +210,21 @@ export default function ClientDetail() {
           api.getPayments({ client_id: id }).catch(() => []),
           api.getRequestedDocs(id).catch(() => [] as string[]),
           api.getTaxFiles(id).catch(() => []),
+          api.getClientNotes(id).catch(() => []),
         ]);
         setRequestedDocNames(new Set(requestedResp || []));
         setTaxFiles(Array.isArray(taxFilesResp) ? taxFilesResp : []);
+        setNotes(
+          (Array.isArray(notesResp) ? notesResp : []).map((n: any) => ({
+            id: n.id,
+            clientId: n.client_id,
+            content: n.content,
+            isClientFacing: n.is_client_facing,
+            authorId: n.author_id,
+            authorName: n.author_name,
+            createdAt: new Date(n.created_at),
+          }))
+        );
 
         // 2. If no T1 data returned, the URL param is a clients.id UUID which differs from
         //    the users.id UUID. Resolve via email: search users by the client's email and retry.
@@ -258,6 +270,12 @@ export default function ClientDetail() {
         // 4. Set documents and payments from real API
         setDocuments((docsResp as any)?.documents || []);
         setPayments(Array.isArray(paymentsResp) ? paymentsResp : []);
+        // Independent of the main Promise.all above — a failure here
+        // shouldn't block the rest of the page from loading.
+        fetchPaymentRequests();
+        api.getAdminUsers()
+          .then((admins) => setAssignableAdmins((admins || []).map((a: any) => ({ id: a.id, name: a.name }))))
+          .catch(() => {});
 
         const clientData = {
           id: id,
@@ -307,6 +325,17 @@ export default function ClientDetail() {
   const [isPaymentRequestOpen, setIsPaymentRequestOpen] = useState(false);
   const [paymentRequestAmount, setPaymentRequestAmount] = useState('');
   const [paymentRequestNote, setPaymentRequestNote] = useState('');
+  // Parsed from GET /notifications (type=payment_request) — there is no
+  // dedicated payment_requests table (notifications has no ORM model
+  // anywhere in the repo), so the amount lives in the title this endpoint
+  // already returns ("Payment Requested — $120.00 CAD", see notifications.py).
+  // This is what answers "how do other employees know what was requested" —
+  // fetched per-page-load, not a locally-tracked list.
+  const [paymentRequests, setPaymentRequests] = useState<
+    Array<{ id: string; amount: number; note: string; createdAt: string }>
+  >([]);
+  const [assignableAdmins, setAssignableAdmins] = useState<Array<{ id: string; name: string }>>([]);
+  const [isAssigning, setIsAssigning] = useState(false);
   const [taxFiles, setTaxFiles] = useState<any[]>([]);
   const [isTaxFileDialogOpen, setIsTaxFileDialogOpen] = useState(false);
   const [taxFileForm, setTaxFileForm] = useState({
@@ -444,26 +473,102 @@ export default function ClientDetail() {
     );
   }
 
+  // Reassigns which staff member owns this return. Backend already supports
+  // it (PATCH /clients/{id} with assigned_admin_id — see update_client in
+  // admin-api/app/api/v1/clients.py); this was pure UI-exposure work.
+  // Explicitly not a client-visible action — no notification is sent.
+  const handleAssignAdmin = async (adminId: string) => {
+    setIsAssigning(true);
+    try {
+      await api.updateClient(client.id, { assigned_admin_id: adminId || null });
+      const admin = assignableAdmins.find((a) => a.id === adminId);
+      setClient((prev: any) => (prev
+        ? { ...prev, assignedAdminId: adminId || null, assignedAdminName: admin?.name || null }
+        : prev));
+      toast({
+        title: adminId ? 'Assignee Updated' : 'Assignee Removed',
+        description: adminId ? `Assigned to ${admin?.name || 'admin'}.` : 'This return is now unassigned.',
+      });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err?.message || 'Failed to update assignee.', variant: 'destructive' });
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  // Pulls payment_request notifications for this client and parses the
+  // amount back out of the title (see notifications.py's title-encoding
+  // comment). Called on initial load and after a new request is sent.
+  const fetchPaymentRequests = async () => {
+    if (!id) return;
+    try {
+      const res = await api.getClientNotifications(id);
+      const list = Array.isArray(res) ? res : res?.notifications || [];
+      const parsed = list
+        .filter((n: any) => n.type === 'payment_request')
+        .map((n: any) => {
+          const match = /\$([0-9,]+(?:\.[0-9]{1,2})?)/.exec(n.title || '');
+          const amount = match ? parseFloat(match[1].replace(/,/g, '')) : NaN;
+          return Number.isFinite(amount)
+            ? { id: n.id, amount, note: n.message || '', createdAt: n.created_at }
+            : null;
+        })
+        .filter((r: any): r is { id: string; amount: number; note: string; createdAt: string } => r !== null);
+      setPaymentRequests(parsed);
+    } catch (e) {
+      console.error('Failed to load payment requests', e);
+    }
+  };
+
   const handleAddNote = async () => {
     if (!newNote.trim()) {
       toast({ title: 'Error', description: 'Please enter a note.', variant: 'destructive' });
       return;
     }
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const note: Note = {
-      id: String(Date.now()),
-      clientId: client.id,
-      authorId: user?.id || '1',
-      authorName: user?.name || 'Admin',
-      content: newNote,
-      isClientFacing,
-      createdAt: new Date(),
-    };
-    setNotes([note, ...notes]);
-    setNewNote('');
-    setIsLoading(false);
-    toast({ title: 'Note Added', description: isClientFacing ? 'Client-facing note added.' : 'Internal note added.' });
+    try {
+      // Persists via /notes (database/migrations/2026_10_notes_table.sql +
+      // services/admin-api/app/api/v1/notes.py) - previously this only ever
+      // set local state, which vanished on refresh. A client-facing note's
+      // notify-the-client half is a separate call to the existing
+      // /notifications endpoint, same as before.
+      const created = await api.createClientNote({
+        client_id: client.id,
+        content: newNote,
+        is_client_facing: isClientFacing,
+      });
+      if (isClientFacing) {
+        await api.sendClientNotification({
+          client_id: client.id,
+          type: 'general',
+          title: 'A note from your advisor',
+          message: newNote,
+          filing_year: client.filingYear,
+          filing_id: t1FormData?.filing_id || undefined,
+        });
+      }
+      const note: Note = {
+        id: created.id,
+        clientId: created.client_id,
+        authorId: created.author_id,
+        authorName: created.author_name,
+        content: created.content,
+        isClientFacing: created.is_client_facing,
+        createdAt: new Date(created.created_at),
+      };
+      setNotes([note, ...notes]);
+      setNewNote('');
+      toast({
+        title: 'Note Added',
+        description: isClientFacing
+          ? 'Client-facing note added — the client was emailed and notified in-app.'
+          : 'Internal note added.',
+      });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err?.message || 'Failed to add note.', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // The header dropdown used to fake a status change: it set local state and
@@ -508,7 +613,7 @@ export default function ClientDetail() {
       // This previously never called the API at all — it fabricated a local
       // payment object and updated component state directly, so nothing was
       // ever persisted. "Recorded" payments were pure UI fiction.
-      await api.createPayment({
+      const result = await api.createPayment({
         client_id: client.id,
         amount,
         method: paymentMethod,
@@ -521,11 +626,23 @@ export default function ClientDetail() {
         ...client,
         paidAmount: client.paidAmount + amount,
         paymentStatus: client.paidAmount + amount >= client.totalAmount ? 'paid' : 'partial',
+        // Mirrors handleUpdateFilingStatus's pattern — without this the
+        // header/Overview status stayed on whatever it was when the page
+        // first loaded, even though the backend had already advanced it.
+        ...(result?.new_filing_status ? { status: result.new_filing_status } : {}),
       });
+      if (result?.new_filing_status) {
+        setT1FormData((prev: any) => (prev ? { ...prev, filing_status: result.new_filing_status } : prev));
+      }
       setPaymentAmount('');
       setPaymentNote('');
       setIsAddPaymentOpen(false);
-      toast({ title: 'Payment Recorded', description: `${formatCurrency(amount)} payment recorded.` });
+      toast({
+        title: 'Payment Recorded',
+        description: result?.new_filing_status_display
+          ? `${formatCurrency(amount)} payment recorded — status is now "${result.new_filing_status_display}".`
+          : `${formatCurrency(amount)} payment recorded.`,
+      });
     } catch (err: any) {
       toast({ title: 'Error', description: err?.message || 'Failed to record payment.', variant: 'destructive' });
     } finally {
@@ -549,7 +666,7 @@ export default function ClientDetail() {
       // Requesting payment logically comes before a filing exists, so it
       // can't have that requirement. Use the notification endpoint instead —
       // it sends the real payment-request email/push with no filing lookup.
-      await api.sendClientNotification({
+      const result = await api.sendClientNotification({
         client_id: client.id,
         type: 'payment_request',
         title: 'Payment Requested',
@@ -557,12 +674,28 @@ export default function ClientDetail() {
         amount,
         filing_id: t1FormData?.filing_id || undefined,
       });
+      // Same staleness fix as handleAddPayment below — the backend already
+      // advances filings.status to "Awaiting Payment" here when eligible,
+      // but nothing applied that to the page's own state, so the header/
+      // Overview status silently kept showing whatever it was on page load.
+      if (result?.new_filing_status) {
+        setT1FormData((prev: any) => (prev ? { ...prev, filing_status: result.new_filing_status } : prev));
+        setClient((prev: any) => (prev ? { ...prev, status: result.new_filing_status } : prev));
+      }
+      // Payment Requests card refetches from the server (see
+      // fetchPaymentRequests) rather than being patched locally here — a
+      // locally-tracked list would only be visible in this admin's own
+      // session, not to any other employee who opens this client later,
+      // which is the exact problem this feature exists to solve.
+      await fetchPaymentRequests();
       setPaymentRequestAmount('');
       setPaymentRequestNote('');
       setIsPaymentRequestOpen(false);
       toast({
         title: 'Payment Request Sent',
-        description: `A payment request of ${formatCurrency(amount)} was sent to ${client.email}.`,
+        description: result?.new_filing_status_display
+          ? `A payment request of ${formatCurrency(amount)} was sent to ${client.email} — status is now "${result.new_filing_status_display}".`
+          : `A payment request of ${formatCurrency(amount)} was sent to ${client.email}.`,
       });
     } catch (err: any) {
       toast({ title: 'Error', description: err?.message || 'Failed to send payment request.', variant: 'destructive' });
@@ -615,6 +748,12 @@ export default function ClientDetail() {
         message: message || `Please upload: ${docName || 'the required document'}.`,
         doc_name: docName,
         filing_year: client.filingYear,
+        // Lets the resulting push notification deep-link straight to this
+        // form's Documents tab instead of the bare list. Deliberately the T1
+        // FORM's own id (t1FormData.id), not t1FormData.filing_id — a
+        // different row that documents_page.dart's t1FormId param can't
+        // resolve against.
+        t1_form_id: t1FormData?.id || undefined,
       } as any);
       if (docName) {
         setRequestedDocNames((prev) => new Set(prev).add(docName));
@@ -715,7 +854,11 @@ export default function ClientDetail() {
       // Only the "filed" transition actually emails/notifies the client
       // (services/admin-api/app/api/v1/filings.py) — every other status
       // change is silent to the client by design, so don't claim otherwise.
-      const clientWasNotified = result.status === 'filed';
+      // A direct approved_by_client -> completed skip (bypassing "filed")
+      // also fires that same email server-side, so it counts here too.
+      const clientWasNotified =
+        result.status === 'filed' ||
+        (result.status === 'completed' && filingStatus === 'approved_by_client');
       toast({
         title: 'Filing Status Updated',
         description: `Now "${result.status_display}"${clientWasNotified ? ' — client notified.' : '.'}`,
@@ -734,9 +877,31 @@ export default function ClientDetail() {
   const handleDownloadTaxFile = async (taxFileId: string, which: 't1' | 't183') => {
     try {
       const { url } = await api.getTaxFileDownloadUrl(taxFileId, which);
-      window.open(url, '_blank');
-    } catch (err: any) {
-      toast({ title: 'Error', description: err?.message || 'Could not get download link.', variant: 'destructive' });
+      // Fetch-and-save as a real blob download rather than window.open, which
+      // just opened the PDF in a new tab — most people don't know to use the
+      // browser's own "Save As" from there. Mirrors the working pattern
+      // already in QuestionDocuments.tsx's handleDownloadDoc.
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Download request failed');
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `${which === 't1' ? 'T1_Return' : 'T183_Form'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(blobUrl);
+      toast({ title: 'Download complete', description: `${which === 't1' ? 'T1 Return' : 'T183 Form'} saved to your device.` });
+    } catch {
+      // CORS-restricted host or similar — still get the file in front of the
+      // admin rather than a dead end.
+      try {
+        const { url } = await api.getTaxFileDownloadUrl(taxFileId, which);
+        window.open(url, '_blank');
+      } catch (err2: any) {
+        toast({ title: 'Error', description: err2?.message || 'Could not get download link.', variant: 'destructive' });
+      }
     }
   };
 
@@ -1027,14 +1192,30 @@ export default function ClientDetail() {
                       </>
                     )}
                   </div>
-                  {client.assignedAdminName && (
-                    <div className="pt-3 border-t border-border">
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-muted-foreground">Assigned Admin:</span>
-                        <Badge variant="secondary">{client.assignedAdminName}</Badge>
-                      </div>
+                  <div className="pt-3 border-t border-border">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground shrink-0">Assigned Admin:</span>
+                      {hasPermission(PERMISSIONS.ASSIGN_CLIENTS) ? (
+                        <Select
+                          value={client.assignedAdminId || 'unassigned'}
+                          onValueChange={(v) => handleAssignAdmin(v === 'unassigned' ? '' : v)}
+                          disabled={isAssigning}
+                        >
+                          <SelectTrigger className="h-8 w-[200px]">
+                            <SelectValue placeholder="Unassigned" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                            {assignableAdmins.map((a) => (
+                              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Badge variant="secondary">{client.assignedAdminName || 'Unassigned'}</Badge>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </CardContent>
               </Card>
 
@@ -1512,6 +1693,43 @@ export default function ClientDetail() {
 
           {/* Payments Tab */}
           <TabsContent value="payments" className="mt-6 animate-fade-in">
+            {paymentRequests.length > 0 && (() => {
+              // Pending balance = the most recent request's amount, minus
+              // whatever's been paid since that request went out. Deliberately
+              // scoped to the LATEST request only rather than summing every
+              // request ever sent — a client who paid in full against an
+              // earlier request shouldn't show a phantom balance from a
+              // superseded ask.
+              const latest = paymentRequests[0];
+              const paidSinceRequest = payments
+                .filter((p: any) => !p.isRequest && new Date(p.createdAt) >= new Date(latest.createdAt))
+                .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+              const pendingBalance = latest.amount - paidSinceRequest;
+              return (
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle>Payment Requests</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {pendingBalance > 0.004 && (
+                      <div className="flex items-center justify-between p-3 rounded-lg border border-orange-500/30 bg-orange-500/10">
+                        <span className="text-sm font-medium text-orange-700">Pending balance (last request)</span>
+                        <span className="text-lg font-bold text-orange-600">{formatCurrency(pendingBalance)}</span>
+                      </div>
+                    )}
+                    {paymentRequests.map((req) => (
+                      <div key={req.id} className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                        <div>
+                          <p className="font-medium">{formatCurrency(req.amount)}</p>
+                          <p className="text-sm text-muted-foreground">Requested {formatDate(req.createdAt)}</p>
+                          {req.note && <p className="text-xs text-muted-foreground mt-1 italic">{req.note}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              );
+            })()}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Payment History</CardTitle>
@@ -2005,6 +2223,12 @@ export default function ClientDetail() {
                   ))}
                 </SelectContent>
               </Select>
+              {pendingFilingStatus === 'filed' && (
+                <p className="text-xs text-muted-foreground">{FILED_STATUS_HELP}</p>
+              )}
+              {pendingFilingStatus === 'completed' && (
+                <p className="text-xs text-muted-foreground">{COMPLETED_STATUS_HELP}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Note to client (optional)</Label>
@@ -2094,6 +2318,7 @@ export default function ClientDetail() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsTaxFileDialogOpen(false)}>Cancel</Button>
             <Button
+              disabled={isLoading}
               onClick={async () => {
                 if (!t1File && !t183File) {
                   toast({ title: 'Error', description: 'Please upload at least one file.', variant: 'destructive' });

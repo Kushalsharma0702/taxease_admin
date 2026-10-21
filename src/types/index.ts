@@ -66,6 +66,10 @@ export interface Client {
   filingCount?: number;
   t1FormCount?: number;
   latestFiling?: Date | null;
+  // Client declined an uploaded return and it hasn't been re-approved/re-
+  // uploaded since (admin-api's get_clients, from tax_files.status) - the
+  // filing status pipeline itself has no distinct value for this.
+  hasPendingChangesRequest?: boolean;
 }
 export interface T1Question {
   id: string;
@@ -234,10 +238,19 @@ export const PIPELINE_STATUS_LABELS: Record<FilingPipelineStatus, string> = {
   in_preparation: 'Work-in-Progress',
   awaiting_approval: 'Sent for Approval',
   approved_by_client: 'Approval Received',
-  filed: 'Filed',
-  completed: 'E-Filing Completed',
+  filed: 'Filed with CRA',
+  completed: 'CRA Confirmed – Filing Complete',
   cancelled: 'Cancelled',
 };
+
+// "Filed" and "Completed" are two distinct, locked pipeline states (EFILE
+// transmitted vs. CRA confirmation received), but this system has no live
+// EFILE integration to signal the second automatically - an admin who gets
+// same-session confirmation can jump approved_by_client -> completed
+// directly (server allows it), so don't assume every filing passes through
+// 'filed' on its way to 'completed'.
+export const FILED_STATUS_HELP = 'Use when the return has been transmitted to the CRA but confirmation is still pending.';
+export const COMPLETED_STATUS_HELP = 'Use once the CRA has confirmed acceptance (or when filing and confirmation happened in the same step).';
 
 // Statuses an admin may set by hand. Excludes the two the system owns:
 // 'draft' (the client hasn't submitted yet) and 'approved_by_client' (only

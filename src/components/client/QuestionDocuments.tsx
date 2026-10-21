@@ -93,7 +93,10 @@ const SECTION_KEYWORDS: Record<string, string[]> = {
     'hotel stay', 'short_term', 'accommodation', 'vehicle_change', 'change_permit'],
   [DOCUMENT_SECTION_KEYS.SELF_EMPLOYMENT]: ['self-employment', 'freelance', 'consulting', 'invoice', 'business',
     'uber', 'lyft', 'doordash', 'skip', 'uber_statement', 'uber_income'],
-  [DOCUMENT_SECTION_KEYS.RENTAL_INCOME]: ['rent', 'rental', 'tenant', 'landlord'],
+  // 'insurance'/'house insurance' added — without it, a rental property's
+  // house-insurance-statement upload matched nothing here and only ever
+  // showed in the generic Documents list, never inline under Rental Income.
+  [DOCUMENT_SECTION_KEYS.RENTAL_INCOME]: ['rent', 'rental', 'tenant', 'landlord', 'insurance', 'house insurance'],
   [DOCUMENT_SECTION_KEYS.CAPITAL_GAINS]: ['capital gain', 'stock', 'trading', 'mutual fund', 'redemption'],
   [DOCUMENT_SECTION_KEYS.WORK_FROM_HOME]: ['work from home', 't2200', 'home office', 't2200_spouse'],
   [DOCUMENT_SECTION_KEYS.TUITION]: ['tuition', 't2202', 'education', 'school', 'college', 'university'],

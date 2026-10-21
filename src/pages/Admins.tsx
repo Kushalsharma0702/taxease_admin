@@ -54,7 +54,7 @@ export default function Admins() {
   const [newAdmin, setNewAdmin] = useState({
     name: '',
     email: '',
-    password: 'demo123',
+    password: '',
     permissions: [] as string[],
   });
 
@@ -183,21 +183,33 @@ export default function Admins() {
       });
       return;
     }
+    // Backend requires at least 8 characters (AdminUserCreate.password,
+    // min_length=8) — there was no password field in this form at all before,
+    // so every create silently fell back to the 7-character 'demo123'
+    // default, which always failed that check with a 422.
+    if (newAdmin.password.length < 8) {
+      toast({
+        title: 'Validation Error',
+        description: 'Password must be at least 8 characters.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsLoading(true);
     try {
       await apiService.createAdminUser({
         name: newAdmin.name,
         email: newAdmin.email,
-        password: newAdmin.password || 'demo123',
+        password: newAdmin.password,
         role: 'admin',
         permissions: newAdmin.permissions,
       });
-      setNewAdmin({ name: '', email: '', password: 'demo123', permissions: [] });
+      setNewAdmin({ name: '', email: '', password: '', permissions: [] });
       setIsAddOpen(false);
       toast({
         title: 'Admin Created',
-        description: `${newAdmin.name} has been added as an admin.`,
+        description: `${newAdmin.name} has been added as an admin. Share the password with them directly — it is not emailed automatically.`,
       });
       fetchAdmins(); // Refresh
     } catch (error) {
@@ -342,6 +354,18 @@ export default function Admins() {
                     onChange={(e) => setNewAdmin({ ...newAdmin, email: e.target.value })}
                     placeholder="john@taxease.ca"
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label>Temporary Password *</Label>
+                  <Input
+                    type="text"
+                    value={newAdmin.password}
+                    onChange={(e) => setNewAdmin({ ...newAdmin, password: e.target.value })}
+                    placeholder="At least 8 characters"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Share this with the new admin yourself — it is not emailed to them.
+                  </p>
                 </div>
                 <div className="space-y-3">
                   <Label>Permissions</Label>

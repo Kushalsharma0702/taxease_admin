@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Client, STATUS_LABELS, ClientStatus } from '@/types';
-import { Plus, Download, Trash2, Edit, Loader2, RefreshCw } from 'lucide-react';
+import { Plus, Download, Trash2, Edit, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/services/api';
@@ -53,16 +53,28 @@ export default function Clients() {
   const [isFetching, setIsFetching] = useState(true);
   const [newClient, setNewClient] = useState({ name: '', email: '', phone: '' });
   const [editClient, setEditClient] = useState({ name: '', email: '', phone: '' });
+  // The real backend count (response.total), independent of how many rows
+  // actually fit in the fetched page — see fetchClients below.
+  const [totalCount, setTotalCount] = useState(0);
 
   // Fetch filings from backend (/filings endpoint, mapped as "clients")
   const fetchClients = useCallback(async () => {
     setIsFetching(true);
     try {
-      const params: { status?: string; year?: number } = {};
+      // page_size 200 is the backend's hard max (clients.py: Query(..., le=200))
+      // and the only pagination this page has — there is no page-through UI
+      // here at all, so without an explicit page_size the backend's default
+      // of 100 silently truncated the table (and every stat tile derived from
+      // it) at the 100th most-recently-created client, with no indication
+      // anything was missing. 200 covers today's volume; the banner below
+      // fires if a real client count ever exceeds that again, since this is
+      // still a stopgap, not real pagination.
+      const params: { status?: string; year?: number; page_size: number } = { page_size: 200 };
       if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
       if (yearFilter && yearFilter !== 'all') params.year = parseInt(yearFilter);
 
       const response = await api.getClients(params);
+      setTotalCount(typeof response.total === 'number' ? response.total : 0);
 
       // Backend returns FilingResponse objects — map them to Client shape
       // FilingResponse: { id, user_id, filing_year, status, total_fee, paid_amount, payment_status, assigned_admin, created_at, updated_at }
@@ -84,6 +96,7 @@ export default function Clients() {
         filingCount: f.filing_count ?? f.filingCount ?? 1,
         t1FormCount: f.t1_form_count ?? f.t1FormCount ?? 0,
         latestFiling: f.latest_filing ? new Date(f.latest_filing) : new Date(f.created_at),
+        hasPendingChangesRequest: !!f.has_pending_changes_request,
       }));
 
       setClients(mappedClients);
@@ -143,7 +156,26 @@ export default function Clients() {
       key: 'status',
       header: 'Status',
       sortable: true,
-      render: (client: Client) => <StatusBadge status={client.status} type="client" />,
+      render: (client: Client) => (
+        <div className="flex items-center gap-1.5">
+          <StatusBadge status={client.status} type="client" />
+          {client.hasPendingChangesRequest && (
+            <span title="Client declined the uploaded return and requested changes — open the client to see their feedback.">
+              <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'assignedAdminName',
+      header: 'Assignee',
+      sortable: true,
+      render: (client: Client) => (
+        <span className={client.assignedAdminName ? '' : 'text-muted-foreground'}>
+          {client.assignedAdminName || 'Unassigned'}
+        </span>
+      ),
     },
     {
       key: 'latestFiling',
@@ -208,21 +240,38 @@ export default function Clients() {
   ];
 
   const handleAddClient = async () => {
+    // The form collects name/email/phone (both required server-side — see
+    // ClientBase in admin-api's schemas/client.py), but this used to call
+    // createFiling({ filing_year }) instead of createClient, discarding all
+    // three fields and always 422'ing on the missing name/email.
+    if (!newClient.name.trim() || !newClient.email.trim()) {
+      toast({
+        title: 'Validation Error',
+        description: 'Name and email are required.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setIsLoading(true);
     try {
-      // Backend creates a filing record — name/email/phone are not stored server-side yet
-      await api.createFiling({ filing_year: new Date().getFullYear() });
+      const filingYear = yearFilter !== 'all' ? parseInt(yearFilter) : new Date().getFullYear();
+      await api.createClient({
+        name: newClient.name.trim(),
+        email: newClient.email.trim(),
+        phone: newClient.phone.trim() || undefined,
+        filing_year: filingYear,
+      });
       setNewClient({ name: '', email: '', phone: '' });
       setIsAddOpen(false);
       toast({
-        title: 'Filing Created',
-        description: 'A new filing record has been created for the current tax year.',
+        title: 'Client Created',
+        description: `${newClient.name} has been added for ${filingYear}.`,
       });
       fetchClients();
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create filing record',
+        description: error.message || 'Failed to create client',
         variant: 'destructive',
       });
     } finally {
@@ -276,12 +325,56 @@ export default function Clients() {
     }
   };
 
+  // No backend export endpoint exists (grep across admin-api/app finds none,
+  // despite the frontend having stub URLs for one) — building a CSV from the
+  // list already loaded is the honest fix rather than leaving a dead button.
+  // Only exports the currently-visible (filtered) set, same as the table.
+  const handleExport = () => {
+    if (filteredClients.length === 0) {
+      toast({ title: 'Nothing to export', description: 'No clients match the current filters.' });
+      return;
+    }
+    const headers = [
+      'Name', 'Email', 'Phone', 'Filing Year', 'Status', 'Payment Status',
+      'Assigned Admin', 'Total Amount', 'Paid Amount', 'Created At',
+    ];
+    const escapeCsv = (value: unknown) => {
+      const str = value === null || value === undefined ? '' : String(value);
+      return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    };
+    const rows = filteredClients.map((c) => [
+      c.name, c.email, c.phone, c.filingYear, c.status, c.paymentStatus,
+      c.assignedAdminName || '', c.totalAmount, c.paidAmount,
+      c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
+    ]);
+    const csv = [headers, ...rows].map((row) => row.map(escapeCsv).join(',')).join('\r\n');
+    // Prepend a BOM so Excel (the overwhelmingly likely consumer here)
+    // detects UTF-8 instead of guessing a legacy codepage and mangling names.
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `clients_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast({ title: 'Export ready', description: `${filteredClients.length} client(s) downloaded as CSV.` });
+  };
+
   return (
     <DashboardLayout
       title="Client Management"
       breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Clients' }]}
     >
       <div className="space-y-6 animate-fade-in">
+        {totalCount > 200 && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+            Showing the 200 most recently created clients out of {totalCount} total — this page has no
+            page-through controls yet. Use the search box to find an older client, or ask engineering to
+            add real pagination now that the client count has passed 200.
+          </div>
+        )}
         {/* Header Actions */}
         <div className="flex flex-col sm:flex-row gap-4 justify-between">
           <div className="flex items-center gap-3">
@@ -312,7 +405,7 @@ export default function Clients() {
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="transition-all duration-200 hover:scale-105">
+            <Button variant="outline" size="sm" className="transition-all duration-200 hover:scale-105" onClick={handleExport}>
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
@@ -379,7 +472,10 @@ export default function Clients() {
         {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Total Clients', value: filteredClients.length, color: '' },
+            // The real backend total, not filteredClients.length (which is
+            // capped at whatever page_size was fetched and additionally
+            // narrowed by the client-side status/year filter below it).
+            { label: 'Total Clients', value: totalCount, color: '' },
             { label: 'Documents Pending', value: filteredClients.filter(c => c.status === 'documents_pending').length, color: 'text-amber-600' },
             // clients.status now carries the filing pipeline value
             // ('payment_request_sent'); 'awaiting_payment' is the legacy

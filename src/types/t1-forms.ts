@@ -126,6 +126,22 @@ export interface T1MovingExpenses {
   applicable: boolean;
   oldAddress: string | { street: string; city: string; province: string; postalCode: string };
   newAddress: string | { street: string; city: string; province: string; postalCode: string };
+  // Flat structured fields (matches T1PersonalInfo's own breakdown) — the
+  // client always sent oldAddress/newAddress as plain strings until this was
+  // fixed; these are what it writes now, oldAddress/newAddress above stay as
+  // legacy combined strings for backward compat.
+  oldAddressStreet?: string;
+  oldAddressAptSuite?: string;
+  oldAddressCity?: string;
+  oldAddressProvince?: string;
+  oldAddressPostalCode?: string;
+  oldAddressCountry?: string;
+  newAddressStreet?: string;
+  newAddressAptSuite?: string;
+  newAddressCity?: string;
+  newAddressProvince?: string;
+  newAddressPostalCode?: string;
+  newAddressCountry?: string;
   distanceFromOldToNew?: string;
   distanceFromNewToOffice?: string;
   airTicketCost?: number;
@@ -290,6 +306,12 @@ export interface T1UberIncome {
 export interface T1RentalIncome {
   id: string;
   propertyAddress: string;
+  propertyAddressStreet?: string;
+  propertyAddressAptSuite?: string;
+  propertyAddressCity?: string;
+  propertyAddressProvince?: string;
+  propertyAddressPostalCode?: string;
+  propertyAddressCountry?: string;
   coOwnerPartner1?: string;
   coOwnerPartner2?: string;
   coOwnerPartner3?: string;
@@ -316,6 +338,12 @@ export interface T1RentalIncome {
   purchasePrice?: number;
   purchaseDate?: string;
   additionDeletionAmount?: number;
+  // CCA/Depreciation (other than building) — see t1_form_models_simple.dart's
+  // comment: this used to be written into a document-filename map client-side
+  // and never reached the backend as real data at all.
+  ccaOtherDetails?: string;
+  ccaOtherPurchaseDate?: string;
+  ccaOtherAmount?: number;
   totalExpenses: number;
   netRentalIncome: number;
 }

@@ -64,6 +64,28 @@ const formatDate = (value: string | undefined | null): string => {
   return formatDateUtil(value);
 };
 
+// Structured address breakdown — Rental Income and both Capital Gains
+// sections (long-term and short-term share one underlying model) used to
+// show only a single combined address string, unlike every other address on
+// this form. `data` carries flat sibling fields (e.g. propertyAddressStreet),
+// matching the client's own T1PropertySaleDetails/T1RentalIncome breakdown.
+function AddressBreakdown({ data, prefix }: { data: Record<string, any>; prefix: string }) {
+  const street = data[`${prefix}Street`];
+  const city = data[`${prefix}City`];
+  const province = data[`${prefix}Province`];
+  if (!street && !city && !province) return null;
+  return (
+    <div className="grid gap-3 sm:grid-cols-3 pl-3 border-l-2 border-border">
+      {street && <CopyableField label="Street" value={street} />}
+      {data[`${prefix}AptSuite`] && <CopyableField label="Apt / Suite" value={data[`${prefix}AptSuite`]} />}
+      {city && <CopyableField label="City" value={city} />}
+      {province && <CopyableField label="Province" value={province} />}
+      {data[`${prefix}PostalCode`] && <CopyableField label="Postal Code" value={data[`${prefix}PostalCode`]} />}
+      {data[`${prefix}Country`] && <CopyableField label="Country" value={data[`${prefix}Country`]} />}
+    </div>
+  );
+}
+
 export function T1CRAReadyForm({ 
   clientId, 
   filingYear,
@@ -437,7 +459,32 @@ export function T1CRAReadyForm({
               <h5 className="font-medium text-sm text-muted-foreground mb-3">Addresses & Distances</h5>
               <div className="grid gap-3">
                 <CopyableField label="Old Address" value={typeof entry.data.oldAddress === 'string' ? entry.data.oldAddress : ''} />
+                {/* Structured breakdown — same fields as every other address
+                    on this form (Personal Info, Rental, Capital Gains).
+                    oldAddress/newAddress above are the legacy combined
+                    strings, kept for backward compat with forms submitted
+                    before this breakdown existed. */}
+                {(entry.data.oldAddressStreet || entry.data.oldAddressCity || entry.data.oldAddressProvince) && (
+                  <div className="grid gap-3 sm:grid-cols-3 pl-3 border-l-2 border-border">
+                    {entry.data.oldAddressStreet && <CopyableField label="Street" value={entry.data.oldAddressStreet} />}
+                    {entry.data.oldAddressAptSuite && <CopyableField label="Apt / Suite" value={entry.data.oldAddressAptSuite} />}
+                    {entry.data.oldAddressCity && <CopyableField label="City" value={entry.data.oldAddressCity} />}
+                    {entry.data.oldAddressProvince && <CopyableField label="Province" value={entry.data.oldAddressProvince} />}
+                    {entry.data.oldAddressPostalCode && <CopyableField label="Postal Code" value={entry.data.oldAddressPostalCode} />}
+                    {entry.data.oldAddressCountry && <CopyableField label="Country" value={entry.data.oldAddressCountry} />}
+                  </div>
+                )}
                 <CopyableField label="New Address" value={typeof entry.data.newAddress === 'string' ? entry.data.newAddress : ''} />
+                {(entry.data.newAddressStreet || entry.data.newAddressCity || entry.data.newAddressProvince) && (
+                  <div className="grid gap-3 sm:grid-cols-3 pl-3 border-l-2 border-border">
+                    {entry.data.newAddressStreet && <CopyableField label="Street" value={entry.data.newAddressStreet} />}
+                    {entry.data.newAddressAptSuite && <CopyableField label="Apt / Suite" value={entry.data.newAddressAptSuite} />}
+                    {entry.data.newAddressCity && <CopyableField label="City" value={entry.data.newAddressCity} />}
+                    {entry.data.newAddressProvince && <CopyableField label="Province" value={entry.data.newAddressProvince} />}
+                    {entry.data.newAddressPostalCode && <CopyableField label="Postal Code" value={entry.data.newAddressPostalCode} />}
+                    {entry.data.newAddressCountry && <CopyableField label="Country" value={entry.data.newAddressCountry} />}
+                  </div>
+                )}
                 <div className="grid gap-3 sm:grid-cols-2">
                   <CopyableField label="Distance Old → New" value={entry.data.distanceFromOldToNew} />
                   <CopyableField label="Distance New → Office" value={entry.data.distanceFromNewToOffice} />
@@ -742,6 +789,7 @@ export function T1CRAReadyForm({
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                           <div className="sm:col-span-3">
                             <CopyableField label="Property Address" value={rent.propertyAddress} />
+                            <div className="mt-2"><AddressBreakdown data={rent} prefix="propertyAddress" /></div>
                           </div>
                           <CopyableField label="Number of Units" value={rent.numberOfUnits?.toString() || 'N/A'} />
                           <CopyableField label="Personal Use Portion" value={rent.personalUsePortion || 'N/A'} />
@@ -811,14 +859,29 @@ export function T1CRAReadyForm({
                         </div>
                       </div>
 
-                      {/* Property Purchase Details */}
+                      {/* Property Purchase Details — "CCA/Depreciation (for building)" on the client form */}
                       {(rent.purchasePrice || rent.purchaseDate) && (
                         <div>
-                          <h6 className="font-medium text-sm text-muted-foreground mb-3">Purchase Details</h6>
+                          <h6 className="font-medium text-sm text-muted-foreground mb-3">CCA/Depreciation (for building)</h6>
                           <div className="grid gap-3 sm:grid-cols-3">
                             {rent.purchaseDate && <CopyableField label="Purchase Date" value={formatDate(rent.purchaseDate)} />}
                             {rent.purchasePrice && <CopyableField label="Purchase Price" value={formatCurrency(rent.purchasePrice)} />}
                             {rent.additionDeletionAmount && <CopyableField label="Addition / Deletion Amount" value={formatCurrency(rent.additionDeletionAmount)} />}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* CCA/Depreciation (other than building) — previously
+                          written into a document-filename map on the client,
+                          so this had no counterpart to render here at all
+                          until that bug was fixed (see t1_form_models_simple.dart). */}
+                      {(rent.ccaOtherDetails || rent.ccaOtherPurchaseDate || rent.ccaOtherAmount) && (
+                        <div>
+                          <h6 className="font-medium text-sm text-muted-foreground mb-3">CCA/Depreciation (other than building)</h6>
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            {rent.ccaOtherDetails && <CopyableField label="Addition Details" value={rent.ccaOtherDetails} />}
+                            {rent.ccaOtherPurchaseDate && <CopyableField label="Purchase Date" value={formatDate(rent.ccaOtherPurchaseDate)} />}
+                            {rent.ccaOtherAmount && <CopyableField label="Amount" value={formatCurrency(rent.ccaOtherAmount)} />}
                           </div>
                         </div>
                       )}
@@ -827,6 +890,30 @@ export function T1CRAReadyForm({
                 ))}
               </>
             )}
+            {/* Rental Income's own documents (house insurance, property tax
+                bill) previously fell through to this single Self-Employment
+                call below, whose keywords never matched them — they only
+                ever showed in the generic Documents tab, never here. */}
+            <QuestionDocuments
+              sectionKey="RENTAL_INCOME"
+              sectionTitle="Rental Income Documents"
+              documents={documents}
+              onApprove={onApproveDoc}
+              onRequestReupload={onRequestReupload}
+              onRequestMissing={onRequestMissing}
+              onView={onViewDoc}
+              canEdit={canEdit}
+            />
+            <QuestionDocuments
+              sectionKey="RENT_PROPERTY_TAX"
+              sectionTitle="Property Tax Documents"
+              documents={documents}
+              onApprove={onApproveDoc}
+              onRequestReupload={onRequestReupload}
+              onRequestMissing={onRequestMissing}
+              onView={onViewDoc}
+              canEdit={canEdit}
+            />
             <QuestionDocuments
               sectionKey="SELF_EMPLOYMENT"
               sectionTitle="Self-Employment Documents"
@@ -883,6 +970,7 @@ export function T1CRAReadyForm({
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="sm:col-span-3">
                   <CopyableField label="Property Address" value={ps.propertyAddress} />
+                  <div className="mt-2"><AddressBreakdown data={ps} prefix="propertyAddress" /></div>
                 </div>
                 <CopyableField label="Purchase Date" value={formatDate(ps.purchaseDate)} />
                 <CopyableField label="Sell Date" value={formatDate(ps.sellDate)} />
@@ -933,6 +1021,7 @@ export function T1CRAReadyForm({
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="sm:col-span-3">
                   <CopyableField label="Property Address" value={ps.propertyAddress} />
+                  <div className="mt-2"><AddressBreakdown data={ps} prefix="propertyAddress" /></div>
                 </div>
                 <CopyableField label="Purchase Date" value={formatDate(ps.purchaseDate)} />
                 <CopyableField label="Sell Date" value={formatDate(ps.sellDate)} />
