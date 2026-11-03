@@ -86,6 +86,13 @@ function AddressBreakdown({ data, prefix }: { data: Record<string, any>; prefix:
   );
 }
 
+// Ride-share/delivery uploads (Uber, Skip, DoorDash, Lyft, U-Ride statements
+// and the car purchase receipt) vs. everything else filed under
+// self-employment - lets the two income sub-sections each show their own docs.
+const RIDE_SHARE_DOC_PATTERN = /uber|skip|doordash|lyft|u-ride|car_purchase|car purchase/i;
+const isRideShareDoc = (d: { name?: string; type?: string | null }) =>
+  RIDE_SHARE_DOC_PATTERN.test(`${d.name || ''} ${d.type || ''}`);
+
 export function T1CRAReadyForm({ 
   clientId, 
   filingYear,
@@ -630,6 +637,21 @@ export function T1CRAReadyForm({
               </>
             )}
 
+            {/* Uber/Skip/DoorDash Documents - shown directly under their own sub-section. */}
+            {formData.selfEmployment.uberIncome && (
+              <QuestionDocuments
+                sectionKey="SELF_EMPLOYMENT"
+                sectionTitle="Uber/Skip/DoorDash Documents"
+                documents={documents}
+                docFilter={isRideShareDoc}
+                onApprove={onApproveDoc}
+                onRequestReupload={onRequestReupload}
+                onRequestMissing={onRequestMissing}
+                onView={onViewDoc}
+                canEdit={canEdit}
+              />
+            )}
+
             {/* General Business Income - Full Detail (60+ fields) */}
             {formData.selfEmployment.generalBusiness && (
               <>
@@ -773,6 +795,21 @@ export function T1CRAReadyForm({
               </>
             )}
 
+            {/* General Business Documents - shown directly under their own sub-section. */}
+            {formData.selfEmployment.generalBusiness && (
+              <QuestionDocuments
+                sectionKey="SELF_EMPLOYMENT"
+                sectionTitle="General Business Documents"
+                documents={documents}
+                docFilter={(d) => !isRideShareDoc(d)}
+                onApprove={onApproveDoc}
+                onRequestReupload={onRequestReupload}
+                onRequestMissing={onRequestMissing}
+                onView={onViewDoc}
+                canEdit={canEdit}
+              />
+            )}
+
             {/* Rental Income - Extended with Co-owners */}
             {formData.selfEmployment.rentalIncome && formData.selfEmployment.rentalIncome.length > 0 && (
               <>
@@ -914,16 +951,6 @@ export function T1CRAReadyForm({
               onView={onViewDoc}
               canEdit={canEdit}
             />
-            <QuestionDocuments
-              sectionKey="SELF_EMPLOYMENT"
-              sectionTitle="Self-Employment Documents"
-              documents={documents}
-              onApprove={onApproveDoc}
-              onRequestReupload={onRequestReupload}
-              onRequestMissing={onRequestMissing}
-              onView={onViewDoc}
-              canEdit={canEdit}
-            />
           </div>
         )}
       </T1CRASection>
@@ -939,21 +966,9 @@ export function T1CRAReadyForm({
           <p className="text-sm font-medium">
             Client purchased their first home in the tax year.
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Document required: Statement of Adjustment issued by lawyer
-          </p>
         </div>
-        <QuestionDocuments
-          sectionKey="FIRST_HOME_BUYER"
-          sectionTitle="First Home Buyer Documents"
-          documents={documents}
-          requiredDocuments={['Statement of Adjustment issued by lawyer']}
-          onApprove={onApproveDoc}
-          onRequestReupload={onRequestReupload}
-          onRequestMissing={onRequestMissing}
-          onView={onViewDoc}
-          canEdit={canEdit}
-        />
+        {/* No document is requested for a first home purchase — the Statement of
+            Adjustment requirement was removed on purpose (client and admin). */}
       </T1CRASection>
 
       {/* Q7: Sold Property (Long Term > 365 days) */}
@@ -974,8 +989,6 @@ export function T1CRAReadyForm({
                 </div>
                 <CopyableField label="Purchase Date" value={formatDate(ps.purchaseDate)} />
                 <CopyableField label="Sell Date" value={formatDate(ps.sellDate)} />
-                <CopyableField label="Purchase & Sell Expenses" value={formatCurrency(ps.purchaseSellExpenses)} />
-                <CopyableField label="Capital Gain Earned" value={formatCurrency(ps.capitalGainEarned)} className="font-semibold" />
               </div>
               <Separator />
               <h5 className="font-medium text-sm text-muted-foreground">Purchase Costs (ACB)</h5>
@@ -991,8 +1004,10 @@ export function T1CRAReadyForm({
                 <CopyableField label="Other Purchase Expenses" value={formatCurrency(ps.purchaseOtherExpenses)} />
               </div>
               <Separator />
-              <h5 className="font-medium text-sm text-muted-foreground">Sale Costs</h5>
+              <h5 className="font-medium text-sm text-muted-foreground">Sale Related Expenses</h5>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {/* Stored under the legacy purchaseSellExpenses key; the client form labels it "Sales Price". */}
+                <CopyableField label="Sales Price" value={formatCurrency(ps.purchaseSellExpenses)} />
                 <CopyableField label="Real Estate Brokerage Charges" value={formatCurrency(ps.realEstateBrokerageCharges)} />
                 <CopyableField label="Legal Fees on Sale" value={formatCurrency(ps.legalFeesOnSale)} />
                 <CopyableField label="Advertising & Listing Fees" value={formatCurrency(ps.advertisingAndListingFees)} />
@@ -1025,8 +1040,6 @@ export function T1CRAReadyForm({
                 </div>
                 <CopyableField label="Purchase Date" value={formatDate(ps.purchaseDate)} />
                 <CopyableField label="Sell Date" value={formatDate(ps.sellDate)} />
-                <CopyableField label="Purchase & Sell Expenses" value={formatCurrency(ps.purchaseSellExpenses)} />
-                <CopyableField label="Capital Gain Earned" value={formatCurrency(ps.capitalGainEarned)} className="font-semibold" />
               </div>
               <Separator />
               <h5 className="font-medium text-sm text-muted-foreground">Purchase Costs (ACB)</h5>
@@ -1042,8 +1055,10 @@ export function T1CRAReadyForm({
                 <CopyableField label="Other Purchase Expenses" value={formatCurrency(ps.purchaseOtherExpenses)} />
               </div>
               <Separator />
-              <h5 className="font-medium text-sm text-muted-foreground">Sale Costs</h5>
+              <h5 className="font-medium text-sm text-muted-foreground">Sale Related Expenses</h5>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {/* Stored under the legacy purchaseSellExpenses key; the client form labels it "Sales Price". */}
+                <CopyableField label="Sales Price" value={formatCurrency(ps.purchaseSellExpenses)} />
                 <CopyableField label="Real Estate Brokerage Charges" value={formatCurrency(ps.realEstateBrokerageCharges)} />
                 <CopyableField label="Legal Fees on Sale" value={formatCurrency(ps.legalFeesOnSale)} />
                 <CopyableField label="Advertising & Listing Fees" value={formatCurrency(ps.advertisingAndListingFees)} />
@@ -1086,6 +1101,7 @@ export function T1CRAReadyForm({
             <h5 className="font-medium text-sm text-muted-foreground">Expenses</h5>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <CopyableField label="Rent Expense" value={formatCurrency(entry.data.rentExpense)} />
+              <CopyableField label="Mortgage Expense" value={formatCurrency(entry.data.mortgageExpense)} />
               <CopyableField label="Mortgage Expense" value={formatCurrency(entry.data.mortgageInterest)} />
               <CopyableField label="Wifi Expense" value={formatCurrency(entry.data.internetExpense)} />
               <CopyableField label="Electricity Expense" value={formatCurrency(entry.data.utilities)} />

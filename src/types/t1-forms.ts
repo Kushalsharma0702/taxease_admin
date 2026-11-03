@@ -371,6 +371,7 @@ export interface T1WorkFromHome {
   workArea: number;
   workAreaPercentage: number;
   rentExpense: number;
+  mortgageExpense?: number; // optional: records saved before the client form had this field
   mortgageInterest: number;
   propertyTax: number;
   utilities: number;

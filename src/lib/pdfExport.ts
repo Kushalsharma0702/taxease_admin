@@ -94,6 +94,83 @@ function formatStructuredAddress(data: Record<string, any>, prefix: string): str
   return formatAddress(data[prefix]);
 }
 
+// Field lists for the income sub-sections, mirroring what the admin detail
+// view (T1CRAReadyForm) shows so the exported PDF carries the same fields.
+// kind: c = currency, n = plain number, t = text, d = date.
+type FieldSpec = [label: string, key: string, kind: 'c' | 'n' | 't' | 'd'];
+const pdfValue = (v: unknown, kind: FieldSpec[2]): string => {
+  if (v === undefined || v === null || v === '') return kind === 'c' ? formatCurrency(0) : 'N/A';
+  if (kind === 'c') return formatCurrency(Number(v) || 0);
+  if (kind === 'd') return formatDate(String(v)) || String(v);
+  return String(v);
+};
+const pdfRows = (obj: Record<string, any>, fields: FieldSpec[]) =>
+  fields.map(([label, key, kind]) => [label, pdfValue(obj?.[key], kind)]);
+// Client-added "other" lines ({ name, amount }[]) under a section.
+const pdfExtraLines = (list: unknown, fallback: string) =>
+  Array.isArray(list)
+    ? list.map((e: any, i: number) => [e?.name || `${fallback} ${i + 1}`, formatCurrency(Number(e?.amount) || 0)])
+    : [];
+
+const UBER_DETAIL_FIELDS: FieldSpec[] = [
+  ['Uber/Skip Statement', 'uberSkipStatement', 't'],
+  ['Business HST Number', 'businessHstNumber', 't'],
+  ['HST Access Code', 'hstAccessCode', 't'],
+  ['HST Filing Period', 'hstFillingPeriod', 't'],
+  ['Total KM for Uber/Skip', 'totalKmForUberSkip', 'n'],
+  ['Total Official KM Driven', 'totalOfficialKmDriven', 'n'],
+  ['Total KM Driven (Entire Year)', 'totalKmDrivenEntireYear', 'n'],
+  ['Business Number / Vehicle Registration', 'businessNumberVehicleRegistration', 't'],
+  ['Meals', 'meals', 'c'], ['Telephone', 'telephone', 'c'], ['Parking Fees', 'parkingFees', 'c'],
+  ['Cleaning Expenses', 'cleaningExpenses', 'c'], ['Safety Inspection', 'safetyInspection', 'c'],
+  ['Winter Tire Change', 'winterTireChange', 'c'], ['Oil Change & Maintenance', 'oilChangeAndMaintenance', 'c'],
+  ['Depreciation', 'depreciation', 'c'], ['Insurance on Vehicle', 'insuranceOnVehicle', 'c'], ['Gas', 'gas', 'c'],
+  ['Financing Cost / Interest', 'financingCostInterest', 'c'], ['Lease Cost', 'leaseCost', 'c'],
+  ['Other Expense', 'otherExpense', 'c'],
+];
+const GB_INFO_FIELDS: FieldSpec[] = [
+  ['Client Name', 'clientName', 't'], ['HST Access Code', 'hstAccessCode', 't'], ['HST Filing Period', 'hstFilingPeriod', 't'],
+];
+// Cost of Goods Sold, laid out like the expenses table: amount + HST columns.
+const GB_COGS_LINES: [label: string, key: string, hstKey: string | null][] = [
+  ['Opening Inventory', 'openingInventory', null],
+  ['Purchases During Year', 'purchasesDuringYear', 'purchasesDuringYearHst'],
+  ['Subcontracts', 'subcontracts', 'subcontractsHst'],
+  ['Direct Wage Costs', 'directWageCosts', null],
+  ['Other Costs', 'otherCosts', 'otherCostsHst'],
+  ['Purchase Returns', 'purchaseReturns', null],
+];
+const GB_OTHER_FIELDS: FieldSpec[] = [
+  ['Other Expense 1', 'otherExpense1', 'c'], ['Other Expense 2', 'otherExpense2', 'c'], ['Other Expense 3', 'otherExpense3', 'c'],
+];
+const GB_HOME_FIELDS: FieldSpec[] = [
+  ['Area of Home for Business (sq ft)', 'areaOfHomeForBusiness', 'n'], ['Total Area of Home (sq ft)', 'totalAreaOfHome', 'n'],
+  ['Heat', 'heat', 'c'], ['Electricity', 'electricity', 'c'], ['House Insurance', 'houseInsurance', 'c'],
+  ['Home Maintenance', 'homeMaintenance', 'c'], ['Mortgage Interest', 'mortgageInterest', 'c'],
+  ['Property Taxes', 'propertyTaxes', 'c'], ['House Rent', 'houseRent', 'c'],
+  ['Home Other Expense 1', 'homeOtherExpense1', 'c'], ['Home Other Expense 2', 'homeOtherExpense2', 'c'],
+];
+const GB_VEHICLE_FIELDS: FieldSpec[] = [
+  ['KM Driven for Business', 'kmDrivenForBusiness', 'n'], ['Total KM Driven in Year', 'totalKmDrivenInYear', 'n'],
+  ['Vehicle Fuel', 'vehicleFuel', 'c'], ['Vehicle Insurance', 'vehicleInsurance', 'c'],
+  ['License & Registration', 'licenseRegistration', 'c'], ['Vehicle Maintenance', 'vehicleMaintenance', 'c'],
+  ['Business Parking', 'businessParking', 'c'], ['Vehicle Other Expense', 'vehicleOtherExpense', 'c'],
+  ['Leasing / Finance Payments', 'leasingFinancePayments', 'c'],
+];
+const RENTAL_DETAIL_FIELDS: FieldSpec[] = [
+  ['Number of Units', 'numberOfUnits', 'n'],
+  ['Government Income Relating to Rental', 'anyGovtIncomeRelatingToRental', 'c'],
+  ['Personal Use Portion', 'personalUsePortion', 't'],
+  ['Cleaning Expense', 'cleaningExpense', 'c'], ['Motor Vehicle Expenses', 'motorVehicleExpenses', 'c'],
+  ['Legal & Professional Fees', 'legalProfessionalFees', 'c'], ['Advertising & Promotion', 'advertisingPromotion', 'c'],
+  ['Other Expense', 'otherExpense', 'c'],
+  ['CCA (building) — Purchase Price', 'purchasePrice', 'c'], ['CCA (building) — Purchase Date', 'purchaseDate', 'd'],
+  ['Addition/deletion in the property amount for this year', 'additionDeletionAmount', 'c'],
+  ['CCA (other than building) — Details', 'ccaOtherDetails', 't'],
+  ['CCA (other than building) — Purchase Date', 'ccaOtherPurchaseDate', 'd'],
+  ['CCA (other than building) — Amount', 'ccaOtherAmount', 'c'],
+];
+
 export async function exportClientPDF(options: PDFExportOptions): Promise<void> {
   const { client, documents, payments, notes, taxFiles, questionnaire } = options;
   const doc = new jsPDF();
@@ -543,6 +620,7 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
         ['Gross Income', formatCurrency(se.uberIncome.income || se.uberIncome.grossIncome || 0)],
         ['Total Expenses', formatCurrency(se.uberIncome.totalExpenses || 0)],
         ['Net Income', formatCurrency(se.uberIncome.netIncome || 0)],
+        ...pdfRows(se.uberIncome, UBER_DETAIL_FIELDS),
       ];
 
       autoTable(doc, {
@@ -572,6 +650,7 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
         ['Gross Income', formatCurrency(gb.grossIncome || 0)],
         ['Total Expenses', formatCurrency(gb.totalExpenses || 0)],
         ['Net Income', formatCurrency(gb.netIncome || 0)],
+        ...pdfRows(gb, GB_INFO_FIELDS),
       ];
       autoTable(doc, {
         startY: yPosition,
@@ -607,6 +686,41 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
         } as any);
         yPosition = (doc as any).lastAutoTable?.finalY + 5 || yPosition + 15;
       }
+
+      // Cost of Goods Sold - same Amount / HST layout as the expenses table.
+      checkNewPage(20 + GB_COGS_LINES.length * 6);
+      autoTable(doc, {
+        startY: yPosition,
+        head: [['Cost of Goods Sold', 'Amount', 'HST']],
+        body: GB_COGS_LINES.map(([label, key, hstKey]) => [
+          label, formatCurrency(Number(gb[key]) || 0), hstKey ? formatCurrency(Number(gb[hstKey]) || 0) : '—',
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [100, 100, 100], fontSize: 8 },
+        styles: { fontSize: 8 },
+      } as any);
+      yPosition = (doc as any).lastAutoTable?.finalY + 5 || yPosition + 15;
+
+      const gbSections: [string, any[]][] = [
+        ['Other Expenses', [...pdfRows(gb, GB_OTHER_FIELDS), ...pdfExtraLines(gb.otherExpenses, 'Other Expense (extra)')]],
+        ['Home Office', [...pdfRows(gb, GB_HOME_FIELDS), ...pdfExtraLines(gb.homeOtherExpenses, 'Home Other Expense (extra)')]],
+        ['Vehicle', [...pdfRows(gb, GB_VEHICLE_FIELDS), ...pdfExtraLines(gb.vehicleOtherExpenses, 'Vehicle Other Expense (extra)')]],
+        ['Notes', gb.notes ? [['Notes', String(gb.notes)]] : []],
+      ];
+      for (const [title, rows] of gbSections) {
+        if (!rows.length) continue;
+        checkNewPage(20 + rows.length * 6);
+        autoTable(doc, {
+          startY: yPosition,
+          head: [[title, '']],
+          body: rows,
+          theme: 'grid',
+          headStyles: { fillColor: [100, 100, 100], fontSize: 8 },
+          styles: { fontSize: 8, overflow: 'linebreak' },
+          columnStyles: { 0: { fontStyle: 'bold', cellWidth: 70 } },
+        } as any);
+        yPosition = (doc as any).lastAutoTable?.finalY + 5 || yPosition + 15;
+      }
     }
 
     if (se.rentalIncome && se.rentalIncome.length > 0) {
@@ -628,6 +742,7 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
           ['Management Fees', formatCurrency(rent.managementFees ?? rent.managementAdminFees ?? 0)],
           ['Total Expenses', formatCurrency(rent.totalExpenses || 0)],
           ['Net Rental Income', formatCurrency(rent.netRentalIncome || 0)],
+          ...pdfRows(rent, RENTAL_DETAIL_FIELDS),
         ];
         autoTable(doc, {
           startY: yPosition,
@@ -697,6 +812,7 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
         ['Total Home Area', `${wfh.totalHomeArea || 0} sq.ft`],
         ['Work Area', `${wfh.workArea || 0} sq.ft`],
         ['Rent Expense', formatCurrency(wfh.rentExpense || 0)],
+        ['Mortgage Expense', formatCurrency(wfh.mortgageExpense || 0)],
         ['Mortgage Interest', formatCurrency(wfh.mortgageInterest || 0)],
         ['Internet Expense', formatCurrency(wfh.internetExpense || 0)],
         ['Utilities', formatCurrency(wfh.utilities || 0)],
@@ -895,8 +1011,7 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
         ['Property Address', formatStructuredAddress(ps, 'propertyAddress') || 'N/A'],
         ['Purchase Date', ps.purchaseDate || 'N/A'],
         ['Sell Date', ps.sellDate || 'N/A'],
-        ['Purchase & Sell Expenses', formatCurrency(ps.purchaseSellExpenses || 0)],
-        ['Capital Gain Earned', formatCurrency(ps.capitalGainEarned || 0)],
+        ['Sales Price', formatCurrency(ps.purchaseSellExpenses || 0)],
       ];
       autoTable(doc, {
         startY: yPosition,

@@ -33,6 +33,9 @@ export const RequestedDocsContext = createContext<Set<string>>(new Set());
 
 interface QuestionDocumentsProps {
   sectionKey: keyof typeof DOCUMENT_SECTION_KEYS;
+  /** Narrows the section's documents further, e.g. to split one section's
+   *  uploads under the sub-section they belong to. */
+  docFilter?: (doc: DocType) => boolean;
   sectionTitle: string;
   documents: DocType[];
   requiredDocuments?: string[];
@@ -116,6 +119,7 @@ export function QuestionDocuments({
   sectionKey,
   sectionTitle,
   documents,
+  docFilter,
   requiredDocuments = [],
   onApprove,
   onRequestReupload,
@@ -156,8 +160,8 @@ export function QuestionDocuments({
       }
       
       return false;
-    });
-  }, [documents, sectionKeyValue]);
+    }).filter(d => !docFilter || docFilter(d));
+  }, [documents, sectionKeyValue, docFilter]);
 
   // Newest upload first, per document-type slot, so a replaced file's older
   // version renders below the current one instead of in upload order.

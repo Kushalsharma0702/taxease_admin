@@ -160,8 +160,12 @@ export default function Clients() {
         <div className="flex items-center gap-1.5">
           <StatusBadge status={client.status} type="client" />
           {client.hasPendingChangesRequest && (
-            <span title="Client declined the uploaded return and requested changes — open the client to see their feedback.">
-              <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive whitespace-nowrap"
+              title="Client declined the uploaded return and requested changes — open the client to see their feedback."
+            >
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Changes Requested
             </span>
           )}
         </div>

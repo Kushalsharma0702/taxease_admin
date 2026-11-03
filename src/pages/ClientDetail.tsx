@@ -537,15 +537,23 @@ export default function ClientDetail() {
         content: newNote,
         is_client_facing: isClientFacing,
       });
+      // The note is already saved at this point. Notify separately so a failed
+      // email/push can't masquerade as "the note wasn't added" (it was), and so
+      // the success message below only claims delivery that actually happened.
+      let notifyError: string | null = null;
       if (isClientFacing) {
-        await api.sendClientNotification({
-          client_id: client.id,
-          type: 'general',
-          title: 'A note from your advisor',
-          message: newNote,
-          filing_year: client.filingYear,
-          filing_id: t1FormData?.filing_id || undefined,
-        });
+        try {
+          await api.sendClientNotification({
+            client_id: client.id,
+            type: 'general',
+            title: 'A note from your advisor',
+            message: newNote,
+            filing_year: client.filingYear,
+            filing_id: t1FormData?.filing_id || undefined,
+          });
+        } catch (notifyErr: any) {
+          notifyError = notifyErr?.message || 'unknown error';
+        }
       }
       const note: Note = {
         id: created.id,
@@ -558,12 +566,20 @@ export default function ClientDetail() {
       };
       setNotes([note, ...notes]);
       setNewNote('');
-      toast({
-        title: 'Note Added',
-        description: isClientFacing
-          ? 'Client-facing note added — the client was emailed and notified in-app.'
-          : 'Internal note added.',
-      });
+      if (notifyError) {
+        toast({
+          title: 'Note saved, client not notified',
+          description: `The note was added, but the email/app notification failed: ${notifyError}`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Note Added',
+          description: isClientFacing
+            ? 'Client-facing note added — the client was emailed and notified in-app.'
+            : 'Internal note added.',
+        });
+      }
     } catch (err: any) {
       toast({ title: 'Error', description: err?.message || 'Failed to add note.', variant: 'destructive' });
     } finally {
@@ -631,6 +647,7 @@ export default function ClientDetail() {
         // first loaded, even though the backend had already advanced it.
         ...(result?.new_filing_status ? { status: result.new_filing_status } : {}),
       });
+      setHasLoadedAuditLogs(false); // payment events land in the Activity Log too
       if (result?.new_filing_status) {
         setT1FormData((prev: any) => (prev ? { ...prev, filing_status: result.new_filing_status } : prev));
       }
@@ -678,6 +695,7 @@ export default function ClientDetail() {
       // advances filings.status to "Awaiting Payment" here when eligible,
       // but nothing applied that to the page's own state, so the header/
       // Overview status silently kept showing whatever it was on page load.
+      setHasLoadedAuditLogs(false); // payment events land in the Activity Log too
       if (result?.new_filing_status) {
         setT1FormData((prev: any) => (prev ? { ...prev, filing_status: result.new_filing_status } : prev));
         setClient((prev: any) => (prev ? { ...prev, status: result.new_filing_status } : prev));
@@ -849,6 +867,9 @@ export default function ClientDetail() {
       // admin-api mirrors filings.status onto clients.status; reflect that here
       // so the Clients list shows the new value without a hard refresh.
       setClient((prev: any) => prev ? { ...prev, status: result.status } : prev);
+      // The change wrote a timeline event; drop the cached Activity Log so it
+      // reloads (now, if the tab is open) instead of staying stale until refresh.
+      setHasLoadedAuditLogs(false);
       setIsFilingStatusOpen(false);
       setFilingStatusNotes('');
       // Only the "filed" transition actually emails/notifies the client

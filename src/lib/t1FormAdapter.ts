@@ -15,6 +15,22 @@
 const parseBool = (v: any): boolean =>
   v === true || v === 'true' || v === 1 || v === '1';
 
+// Structured moving-address parts the client form saves next to the legacy
+// one-line oldAddress/newAddress. The adapter below rebuilds the moving-expense
+// object field by field, so anything not copied here never reaches the admin
+// screen - that is how the street/city/province breakdown went missing.
+const MOVING_ADDRESS_PARTS = ['Street', 'AptSuite', 'City', 'Province', 'PostalCode', 'Country'];
+function pickMovingAddressParts(src: any): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const side of ['oldAddress', 'newAddress']) {
+    for (const part of MOVING_ADDRESS_PARTS) {
+      const key = `${side}${part}`;
+      if (src?.[key] !== undefined && src?.[key] !== null && src?.[key] !== '') out[key] = String(src[key]);
+    }
+  }
+  return out;
+}
+
 // Convert API T1 form data to the format expected by the component
 export function convertApiDataToFormData(t1Data: any) {
   if (!t1Data || !t1Data.answers) return null;
@@ -168,6 +184,7 @@ export function convertApiDataToFormData(t1Data: any) {
       incomeEarnedAfterMove:    parseFloat(meiSrc.grossIncomeAfterMoving) || 0,
       oldAddress:               meiSrc.oldAddress              || '',
       newAddress:               meiSrc.newAddress              || '',
+      ...pickMovingAddressParts(meiSrc),
     };
   }
 
@@ -202,6 +219,7 @@ export function convertApiDataToFormData(t1Data: any) {
       incomeEarnedAfterMove:    parseFloat(mesSrc.grossIncomeAfterMoving) || 0,
       oldAddress:               mesSrc.oldAddress              || '',
       newAddress:               mesSrc.newAddress              || '',
+      ...pickMovingAddressParts(mesSrc),
     };
   }
 
@@ -223,6 +241,7 @@ export function convertApiDataToFormData(t1Data: any) {
     totalHomeArea:   parseFloat(src.totalHouseArea   || src.totalHomeArea)  || 0,
     workArea:        parseFloat(src.totalWorkArea    || src.workArea)        || 0,
     rentExpense:     parseFloat(src.rentExpense)     || 0,
+    mortgageExpense: parseFloat(src.mortgageExpense) || 0,
     mortgageInterest:parseFloat(src.mortgageExpense  || src.mortgageInterest)|| 0,
     internetExpense: parseFloat(src.wifiExpense      || src.internetExpense) || 0,
     utilities:       parseFloat(src.electricityExpense||src.utilities)       || 0,
@@ -329,6 +348,7 @@ export function convertApiDataToFormData(t1Data: any) {
     totalHomeArea: parseFloat(answersMap.workFromHome.totalHouseArea || answersMap.workFromHome.totalHomeArea) || 0,
     workArea: parseFloat(answersMap.workFromHome.totalWorkArea || answersMap.workFromHome.workArea) || 0,
     rentExpense: parseFloat(answersMap.workFromHome.rentExpense) || 0,
+    mortgageExpense: parseFloat(answersMap.workFromHome.mortgageExpense) || 0,
     mortgageInterest: parseFloat(answersMap.workFromHome.mortgageExpense || answersMap.workFromHome.mortgageInterest) || 0,
     internetExpense: parseFloat(answersMap.workFromHome.wifiExpense || answersMap.workFromHome.internetExpense) || 0,
     utilities: parseFloat(answersMap.workFromHome.electricityExpense || answersMap.workFromHome.utilities) || 0,
@@ -364,6 +384,7 @@ export function convertApiDataToFormData(t1Data: any) {
   // Convert children array
   const children = personalInfo.children ? convertArray(personalInfo.children).map(item => ({
     firstName: safeValue(item.firstName),
+    middleName: safeValue(item.middleName),
     lastName: safeValue(item.lastName),
     dateOfBirth: safeValue(item.dateOfBirth),
     sin: safeValue(item.sin),

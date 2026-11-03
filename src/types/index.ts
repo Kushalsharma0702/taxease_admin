@@ -238,8 +238,9 @@ export const PIPELINE_STATUS_LABELS: Record<FilingPipelineStatus, string> = {
   in_preparation: 'Work-in-Progress',
   awaiting_approval: 'Sent for Approval',
   approved_by_client: 'Approval Received',
-  filed: 'Filed with CRA',
-  completed: 'CRA Confirmed – Filing Complete',
+  // 'filed' is legacy only (no longer settable) and reads as the final step.
+  filed: 'E-Filing Completed',
+  completed: 'E-Filing Completed',
   cancelled: 'Cancelled',
 };
 
@@ -250,7 +251,7 @@ export const PIPELINE_STATUS_LABELS: Record<FilingPipelineStatus, string> = {
 // directly (server allows it), so don't assume every filing passes through
 // 'filed' on its way to 'completed'.
 export const FILED_STATUS_HELP = 'Use when the return has been transmitted to the CRA but confirmation is still pending.';
-export const COMPLETED_STATUS_HELP = 'Use once the CRA has confirmed acceptance (or when filing and confirmation happened in the same step).';
+export const COMPLETED_STATUS_HELP = 'Final step. The client is emailed and notified in the app with the thank-you and review request.';
 
 // Statuses an admin may set by hand. Excludes the two the system owns:
 // 'draft' (the client hasn't submitted yet) and 'approved_by_client' (only
@@ -262,7 +263,6 @@ export const ADMIN_SETTABLE_STATUSES: FilingPipelineStatus[] = [
   'payment_completed',
   'in_preparation',
   'awaiting_approval',
-  'filed',
   'completed',
   'cancelled',
 ];
