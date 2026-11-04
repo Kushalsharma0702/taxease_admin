@@ -195,6 +195,35 @@ export default function ClientDetail() {
     });
   };
 
+  // NOTE: declared here, above the early `if (isLoadingClient)` / `if (!client)` returns.
+  // The load effect below calls it; when it was declared after those returns, the
+  // first render never initialised it and every client page failed with
+  // "Cannot access 'fetchPaymentRequests' before initialization" (shown as
+  // "Client Not Found").
+  // Pulls payment_request notifications for this client and parses the
+  // amount back out of the title (see notifications.py's title-encoding
+  // comment). Called on initial load and after a new request is sent.
+  const fetchPaymentRequests = async () => {
+    if (!id) return;
+    try {
+      const res = await api.getClientNotifications(id);
+      const list = Array.isArray(res) ? res : res?.notifications || [];
+      const parsed = list
+        .filter((n: any) => n.type === 'payment_request')
+        .map((n: any) => {
+          const match = /\$([0-9,]+(?:\.[0-9]{1,2})?)/.exec(n.title || '');
+          const amount = match ? parseFloat(match[1].replace(/,/g, '')) : NaN;
+          return Number.isFinite(amount)
+            ? { id: n.id, amount, note: n.message || '', createdAt: n.created_at }
+            : null;
+        })
+        .filter((r: any): r is { id: string; amount: number; note: string; createdAt: string } => r !== null);
+      setPaymentRequests(parsed);
+    } catch (e) {
+      console.error('Failed to load payment requests', e);
+    }
+  };
+
   // Fetch filing details, T1 form data (with answers), documents, and payments
   useEffect(() => {
     const fetchUserData = async () => {
@@ -493,30 +522,6 @@ export default function ClientDetail() {
       toast({ title: 'Error', description: err?.message || 'Failed to update assignee.', variant: 'destructive' });
     } finally {
       setIsAssigning(false);
-    }
-  };
-
-  // Pulls payment_request notifications for this client and parses the
-  // amount back out of the title (see notifications.py's title-encoding
-  // comment). Called on initial load and after a new request is sent.
-  const fetchPaymentRequests = async () => {
-    if (!id) return;
-    try {
-      const res = await api.getClientNotifications(id);
-      const list = Array.isArray(res) ? res : res?.notifications || [];
-      const parsed = list
-        .filter((n: any) => n.type === 'payment_request')
-        .map((n: any) => {
-          const match = /\$([0-9,]+(?:\.[0-9]{1,2})?)/.exec(n.title || '');
-          const amount = match ? parseFloat(match[1].replace(/,/g, '')) : NaN;
-          return Number.isFinite(amount)
-            ? { id: n.id, amount, note: n.message || '', createdAt: n.created_at }
-            : null;
-        })
-        .filter((r: any): r is { id: string; amount: number; note: string; createdAt: string } => r !== null);
-      setPaymentRequests(parsed);
-    } catch (e) {
-      console.error('Failed to load payment requests', e);
     }
   };
 
