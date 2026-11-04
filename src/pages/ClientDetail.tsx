@@ -363,6 +363,25 @@ export default function ClientDetail() {
   const [paymentRequests, setPaymentRequests] = useState<
     Array<{ id: string; amount: number; note: string; createdAt: string }>
   >([]);
+
+  // ---- Payment numbers derived from the latest payment request ----
+  // Payment rows come straight from the API (snake_case `created_at`, and legacy
+  // "Request" rows use method === 'Request'), while notification timestamps have
+  // no timezone suffix (they are UTC). Both were mis-read before, so a recorded
+  // payment never reduced the "pending balance" and the Overview showed a
+  // negative balance whenever the stored total was $0.
+  const toUtcDate = (v: any): Date => {
+    const str = String(v ?? '');
+    return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(str) ? str : str + 'Z');
+  };
+  const isRequestRow = (p: any) => !!p.isRequest || String(p.method || '').toLowerCase() === 'request';
+  const latestPaymentRequest = paymentRequests[0];
+  const paidSinceLatestRequest = latestPaymentRequest
+    ? payments
+        .filter((p: any) => !isRequestRow(p) && toUtcDate(p.created_at ?? p.createdAt) >= toUtcDate(latestPaymentRequest.createdAt))
+        .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0)
+    : 0;
+
   const [assignableAdmins, setAssignableAdmins] = useState<Array<{ id: string; name: string }>>([]);
   const [isAssigning, setIsAssigning] = useState(false);
   const [taxFiles, setTaxFiles] = useState<any[]>([]);
@@ -1257,16 +1276,19 @@ export default function ClientDetail() {
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Total Amount</span>
-                      <span className="text-xl font-bold">{formatCurrency(client.totalAmount)}</span>
+                      <span className="text-xl font-bold">{formatCurrency(client.totalAmount > 0 ? client.totalAmount : (latestPaymentRequest?.amount ?? 0))}</span>
                     </div>
+                    {client.totalAmount <= 0 && latestPaymentRequest && (
+                      <p className="text-xs text-muted-foreground -mt-1">Amount of the latest payment request</p>
+                    )}
                     <Separator />
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Paid</span>
-                      <span className="font-semibold text-green-600">{formatCurrency(client.paidAmount)}</span>
+                      <span className="font-semibold text-green-600">{formatCurrency(client.totalAmount > 0 || !latestPaymentRequest ? client.paidAmount : paidSinceLatestRequest)}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Balance</span>
-                      <span className="font-semibold text-orange-500">{formatCurrency(client.totalAmount - client.paidAmount)}</span>
+                      <span className="font-semibold text-orange-500">{formatCurrency(Math.max(0, client.totalAmount > 0 || !latestPaymentRequest ? client.totalAmount - client.paidAmount : latestPaymentRequest.amount - paidSinceLatestRequest))}</span>
                     </div>
                     <Separator />
                     <div className="flex justify-between items-center">
@@ -1735,10 +1757,7 @@ export default function ClientDetail() {
               // earlier request shouldn't show a phantom balance from a
               // superseded ask.
               const latest = paymentRequests[0];
-              const paidSinceRequest = payments
-                .filter((p: any) => !p.isRequest && new Date(p.createdAt) >= new Date(latest.createdAt))
-                .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-              const pendingBalance = latest.amount - paidSinceRequest;
+              const pendingBalance = latest.amount - paidSinceLatestRequest;
               return (
                 <Card className="mb-6">
                   <CardHeader>
