@@ -86,6 +86,12 @@ function AddressBreakdown({ data, prefix }: { data: Record<string, any>; prefix:
   );
 }
 
+// Q1 slips: storage keys the in-form upload buttons use -> what the client sees.
+const T_SLIP_LABELS: Record<string, string> = { T4A_P: 'T4A(P)', T4A_OAS: 'T4A(OAS)' };
+const T_SLIP_DOC_PATTERN = /(^|[^A-Za-z0-9])T(3|4|5|4A|5008|4RSP|4E|4RIF)([^A-Za-z0-9]|$)/i;
+const isTSlipDoc = (d: { name?: string; type?: string | null }) =>
+  T_SLIP_DOC_PATTERN.test(`${d.name || ''} ${d.type || ''}`);
+
 // Ride-share/delivery uploads (Uber, Skip, DoorDash, Lyft, U-Ride statements
 // and the car purchase receipt) vs. everything else filed under
 // self-employment - lets the two income sub-sections each show their own docs.
@@ -354,9 +360,38 @@ export function T1CRAReadyForm({
         </T1CRASection>
       )}
 
-      {/* Q1: Foreign Property (> CAN$100,000) */}
+      {/* Q1: Do you have any of the following documents? (T-slips) */}
       <T1CRASection
-        title="Q1: Foreign Property (> CAN$100,000)"
+        title="Q1: Do you have any of the following documents?"
+        icon={<FileText className="h-5 w-5 text-primary" />}
+        applicable={!!formData.availableDocumentTypes?.length}
+        sectionData={{ availableDocumentTypes: formData.availableDocumentTypes } as Record<string, unknown>}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">Slips the client says they have (each one gets an upload button in the app):</p>
+          <div className="flex flex-wrap gap-2">
+            {(formData.availableDocumentTypes || []).map((t: string) => (
+              <Badge key={t} variant="secondary">{T_SLIP_LABELS[t] || t}</Badge>
+            ))}
+          </div>
+        </div>
+        <QuestionDocuments
+          sectionKey="AVAILABLE_DOCUMENTS"
+          sectionTitle="T-slip Documents"
+          documents={documents}
+          docFilter={isTSlipDoc}
+          requiredDocuments={(formData.availableDocumentTypes || []).map((t: string) => T_SLIP_LABELS[t] || t)}
+          onApprove={onApproveDoc}
+          onRequestReupload={onRequestReupload}
+          onRequestMissing={onRequestMissing}
+          onView={onViewDoc}
+          canEdit={canEdit}
+        />
+      </T1CRASection>
+
+      {/* Q2: Foreign Property (> CAN$100,000) */}
+      <T1CRASection
+        title="Q2: Foreign Property (> CAN$100,000)"
         icon={<Globe className="h-5 w-5 text-primary" />}
         applicable={!!formData.foreignProperty?.length}
         sectionData={formData.foreignProperty as unknown as Record<string, unknown>}
@@ -384,9 +419,9 @@ export function T1CRAReadyForm({
         />
       </T1CRASection>
 
-      {/* Q2: Medical Expenses */}
+      {/* Q3: Medical Expenses */}
       <T1CRASection
-        title="Q2: Medical Expenses"
+        title="Q3: Medical Expenses"
         icon={<HeartPulse className="h-5 w-5 text-primary" />}
         applicable={!!formData.medicalExpenses?.length}
         sectionData={formData.medicalExpenses as unknown as Record<string, unknown>}
@@ -410,9 +445,9 @@ export function T1CRAReadyForm({
         </div>
       </T1CRASection>
 
-      {/* Q3: Charitable Donations */}
+      {/* Q4: Charitable Donations */}
       <T1CRASection
-        title="Q3: Charitable Donations"
+        title="Q4: Charitable Donations"
         icon={<Gift className="h-5 w-5 text-primary" />}
         applicable={!!formData.charitableDonations?.length}
         sectionData={formData.charitableDonations as unknown as Record<string, unknown>}
@@ -443,9 +478,9 @@ export function T1CRAReadyForm({
         />
       </T1CRASection>
 
-      {/* Q4: Moving Expenses */}
+      {/* Q5: Moving Expenses */}
       <T1CRASection
-        title="Q4: Moving Expenses (Province Change)"
+        title="Q5: Moving Expenses (Province Change)"
         icon={<Truck className="h-5 w-5 text-primary" />}
         applicable={!!formData.hasMovingExpenses || !!formData.movingExpenseForIndividual || !!formData.movingExpenseForSpouse}
         sectionData={formData.movingExpenses as unknown as Record<string, unknown>}
@@ -555,9 +590,9 @@ export function T1CRAReadyForm({
         />
       </T1CRASection>
 
-      {/* Q5: Self-Employment */}
+      {/* Q6: Self-Employment */}
       <T1CRASection
-        title="Q5: Self-Employment"
+        title="Q6: Self-Employment"
         icon={<Building2 className="h-5 w-5 text-primary" />}
         applicable={!!formData.selfEmployment}
         sectionData={formData.selfEmployment as unknown as Record<string, unknown>}
@@ -955,9 +990,9 @@ export function T1CRAReadyForm({
         )}
       </T1CRASection>
 
-      {/* Q6: First Home Buyer */}
+      {/* Q7: First Home Buyer */}
       <T1CRASection
-        title="Q6: First Home Purchase"
+        title="Q7: First Home Purchase"
         icon={<Home className="h-5 w-5 text-primary" />}
         applicable={!!formData.isFirstHomeBuyer}
         sectionData={{ isFirstHomeBuyer: formData.isFirstHomeBuyer } as Record<string, unknown>}
@@ -971,9 +1006,9 @@ export function T1CRAReadyForm({
             Adjustment requirement was removed on purpose (client and admin). */}
       </T1CRASection>
 
-      {/* Q7: Sold Property (Long Term > 365 days) */}
+      {/* Q8: Sold Property (Long Term > 365 days) */}
       <T1CRASection
-        title="Q7: Property Sale (Held > 365 days)"
+        title="Q8: Property Sale (Held > 365 days)"
         icon={<TrendingUp className="h-5 w-5 text-primary" />}
         applicable={!!formData.propertySaleLongTerm}
         sectionData={formData.propertySaleLongTerm as unknown as Record<string, unknown>}
@@ -1022,9 +1057,9 @@ export function T1CRAReadyForm({
         })()}
       </T1CRASection>
 
-      {/* Q8: Sold Property (Short Term < 365 days / FLIP) */}
+      {/* Q9: Sold Property (Short Term < 365 days / FLIP) */}
       <T1CRASection
-        title="Q8: Property Sale (Held < 365 days / FLIP)"
+        title="Q9: Property Sale (Held < 365 days / FLIP)"
         icon={<Home className="h-5 w-5 text-primary" />}
         applicable={!!formData.propertySaleShortTerm}
         sectionData={formData.propertySaleShortTerm as unknown as Record<string, unknown>}
@@ -1073,9 +1108,9 @@ export function T1CRAReadyForm({
         })()}
       </T1CRASection>
 
-      {/* Q9: Work From Home (T2200) */}
+      {/* Q10: Work From Home (T2200) */}
       <T1CRASection
-        title="Q9: Work From Home Expense (T2200)"
+        title="Q10: Work From Home Expense (T2200)"
         icon={<Home className="h-5 w-5 text-primary" />}
         applicable={!!formData.hasWorkFromHomeExpense || !!formData.workFromHomeForIndividual || !!formData.workFromHomeForSpouse || !!formData.workFromHome}
         sectionData={formData.workFromHome as unknown as Record<string, unknown>}
@@ -1124,9 +1159,9 @@ export function T1CRAReadyForm({
         />
       </T1CRASection>
 
-      {/* Q10: Student (T2202A) */}
+      {/* Q11: Student (T2202A) */}
       <T1CRASection
-        title="Q10: Student (T2202A Form)"
+        title="Q11: Student (T2202A Form)"
         icon={<GraduationCap className="h-5 w-5 text-primary" />}
         applicable={!!formData.isStudent}
         sectionData={{ isStudent: formData.isStudent } as Record<string, unknown>}
@@ -1152,9 +1187,9 @@ export function T1CRAReadyForm({
         />
       </T1CRASection>
 
-      {/* Q11: Union Member / Union Dues */}
+      {/* Q12: Union Member / Union Dues */}
       <T1CRASection
-        title="Q11: Union Dues"
+        title="Q12: Union Dues"
         icon={<Users className="h-5 w-5 text-primary" />}
         applicable={!!formData.unionDues?.length}
         sectionData={formData.unionDues as unknown as Record<string, unknown>}
@@ -1179,9 +1214,9 @@ export function T1CRAReadyForm({
         />
       </T1CRASection>
 
-      {/* Q12: Daycare Expenses */}
+      {/* Q13: Daycare Expenses */}
       <T1CRASection
-        title="Q12: Daycare Expenses"
+        title="Q13: Daycare Expenses"
         icon={<Baby className="h-5 w-5 text-primary" />}
         applicable={!!formData.childcare?.length}
         sectionData={formData.childcare as unknown as Record<string, unknown>}
@@ -1209,9 +1244,9 @@ export function T1CRAReadyForm({
         />
       </T1CRASection>
 
-      {/* Q13: First-Time Filer */}
+      {/* Q14: First-Time Filer */}
       <T1CRASection
-        title="Q13: First-Time Filer"
+        title="Q14: First-Time Filer"
         icon={<Plane className="h-5 w-5 text-primary" />}
         applicable={!!formData.isFirstTimeFiler}
         sectionData={{ isFirstTimeFiler: formData.isFirstTimeFiler } as Record<string, unknown>}
@@ -1237,9 +1272,9 @@ export function T1CRAReadyForm({
         ))}
       </T1CRASection>
 
-      {/* Q14: Other Income (No T-Slips) */}
+      {/* Q15: Other Income (No T-Slips) */}
       <T1CRASection
-        title="Q14: Other Income (No T-Slips)"
+        title="Q15: Other Income (No T-Slips)"
         icon={<Receipt className="h-5 w-5 text-primary" />}
         applicable={!!formData.otherIncome?.length}
         sectionData={formData.otherIncome as unknown as Record<string, unknown>}
@@ -1254,9 +1289,9 @@ export function T1CRAReadyForm({
         />
       </T1CRASection>
 
-      {/* Q15: Professional Dues / License Fees */}
+      {/* Q16: Professional Dues / License Fees */}
       <T1CRASection
-        title="Q15: Professional Dues / License Fees"
+        title="Q16: Professional Dues / License Fees"
         icon={<Award className="h-5 w-5 text-primary" />}
         applicable={!!formData.professionalDues?.length}
         sectionData={formData.professionalDues as unknown as Record<string, unknown>}
@@ -1283,9 +1318,9 @@ export function T1CRAReadyForm({
         />
       </T1CRASection>
 
-      {/* Q16: RRSP/FHSA Investment */}
+      {/* Q17: RRSP/FHSA Investment */}
       <T1CRASection
-        title="Q16: RRSP/FHSA Investment"
+        title="Q17: RRSP/FHSA Investment"
         icon={<DollarSign className="h-5 w-5 text-primary" />}
         applicable={!!formData.hasRrspFhsaInvestment}
         sectionData={{ hasRrspFhsaInvestment: formData.hasRrspFhsaInvestment } as Record<string, unknown>}
@@ -1311,9 +1346,9 @@ export function T1CRAReadyForm({
         />
       </T1CRASection>
 
-      {/* Q17: Children's Art & Sport Tax Credit */}
+      {/* Q18: Children's Art & Sport Tax Credit */}
       <T1CRASection
-        title="Q17: Children's Art & Sport Tax Credit"
+        title="Q18: Children's Art & Sport Tax Credit"
         icon={<Palette className="h-5 w-5 text-primary" />}
         applicable={!!formData.childrenCredits?.length}
         sectionData={formData.childrenCredits as unknown as Record<string, unknown>}
@@ -1326,11 +1361,21 @@ export function T1CRAReadyForm({
           ]}
           data={(formData.childrenCredits || []).map(c => ({ ...c, description: c.description || c.programDescription || 'N/A' }))}
         />
+        <QuestionDocuments
+          sectionKey="CHILD_ART_SPORT"
+          sectionTitle="Children's Art & Sport Receipts"
+          documents={documents}
+          onApprove={onApproveDoc}
+          onRequestReupload={onRequestReupload}
+          onRequestMissing={onRequestMissing}
+          onView={onViewDoc}
+          canEdit={canEdit}
+        />
       </T1CRASection>
 
-      {/* Q18: Rent or Property Tax (Ontario/Quebec) */}
+      {/* Q19: Rent or Property Tax (Ontario/Quebec) */}
       <T1CRASection
-        title="Q18: Rent or Property Tax (Ontario/Quebec)"
+        title="Q19: Rent or Property Tax (Ontario/Quebec)"
         icon={<Home className="h-5 w-5 text-primary" />}
         applicable={!!formData.isProvinceFiler}
         sectionData={{ isProvinceFiler: formData.isProvinceFiler } as Record<string, unknown>}
@@ -1357,9 +1402,9 @@ export function T1CRAReadyForm({
         ))}
       </T1CRASection>
 
-      {/* Q19: Disability Tax Credit */}
+      {/* Q20: Disability Tax Credit */}
       <T1CRASection
-        title="Q19: Disability Tax Credit"
+        title="Q20: Disability Tax Credit"
         icon={<HeartPulse className="h-5 w-5 text-primary" />}
         applicable={!!formData.disabilityTaxCredit?.length}
         sectionData={formData.disabilityTaxCredit as unknown as Record<string, unknown>}
@@ -1397,9 +1442,9 @@ export function T1CRAReadyForm({
         />
       </T1CRASection>
 
-      {/* Q20: Filing for Deceased */}
+      {/* Q21: Filing for Deceased */}
       <T1CRASection
-        title="Q20: Filing for Deceased Person"
+        title="Q21: Filing for Deceased Person"
         icon={<FileText className="h-5 w-5 text-primary" />}
         applicable={!!formData.deceasedReturn}
         sectionData={formData.deceasedReturn as unknown as Record<string, unknown>}

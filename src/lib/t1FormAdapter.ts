@@ -433,6 +433,8 @@ export function convertApiDataToFormData(t1Data: any) {
     medicalExpenses: medicalExpenses,
     charitableDonations: charitableDonations,
     // Show moving expenses if the boolean flag is set OR if any individual/spouse data object exists
+    // Q1: the T-slip types the client ticked (stored as answers 'availableDocumentTypes[i]').
+    availableDocumentTypes: Array.isArray(answersMap.availableDocumentTypes) ? answersMap.availableDocumentTypes.filter(Boolean).map(String) : [],
     hasMovingExpenses: parseBool(answersMap.hasMovingExpenses) || !!answersMap.movingExpenseIndividual || !!answersMap.movingExpenseSpouse,
     movingExpenseForIndividual: parseBool(answersMap.movingExpenseForIndividual) || !!answersMap.movingExpenseIndividual,
     movingExpenseForSpouse: parseBool(answersMap.movingExpenseForSpouse) || !!answersMap.movingExpenseSpouse,

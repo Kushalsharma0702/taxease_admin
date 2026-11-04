@@ -219,6 +219,8 @@ export const DOCUMENT_SECTION_KEYS = {
   WORK_FROM_HOME: 'work_from_home',
   TUITION: 'tuition',
   CHILDCARE: 'childcare',
+  CHILD_ART_SPORT: 'child_art_sport',          // Q18 - was lumped under Daycare
+  AVAILABLE_DOCUMENTS: 'available_documents',  // Q1 - T4/T4A/T5/T5008/T4A(P)/T4RSP/T4E/T4A(OAS)/T3/T4RIF
   UNION_DUES: 'union_dues',
   PROFESSIONAL_DUES: 'professional_dues',
   DISABILITY: 'disability_tax_credit',
@@ -270,7 +272,17 @@ export const CATEGORY_TO_SECTION_KEY: Record<string, DocumentSectionKey> = {
   't2200': DOCUMENT_SECTION_KEYS.WORK_FROM_HOME,
   't2200_spouse': DOCUMENT_SECTION_KEYS.WORK_FROM_HOME,
   't2202': DOCUMENT_SECTION_KEYS.TUITION,
-  'child_art_sport': DOCUMENT_SECTION_KEYS.CHILDCARE,
+  'child_art_sport': DOCUMENT_SECTION_KEYS.CHILD_ART_SPORT,
+  // Moving-expense receipts the app uploads under these keys; air tickets and
+  // meals had no entry, so they fell through to "Other documents".
+  'air_ticket_receipts': DOCUMENT_SECTION_KEYS.MOVING_EXPENSES,
+  'meals_receipt': DOCUMENT_SECTION_KEYS.MOVING_EXPENSES,
+  // Q1 "available documents" slips (storage keys used by the in-form upload buttons)
+  'T4': DOCUMENT_SECTION_KEYS.AVAILABLE_DOCUMENTS, 'T4A': DOCUMENT_SECTION_KEYS.AVAILABLE_DOCUMENTS,
+  'T5': DOCUMENT_SECTION_KEYS.AVAILABLE_DOCUMENTS, 'T5008': DOCUMENT_SECTION_KEYS.AVAILABLE_DOCUMENTS,
+  'T4A_P': DOCUMENT_SECTION_KEYS.AVAILABLE_DOCUMENTS, 'T4RSP': DOCUMENT_SECTION_KEYS.AVAILABLE_DOCUMENTS,
+  'T4E': DOCUMENT_SECTION_KEYS.AVAILABLE_DOCUMENTS, 'T4A_OAS': DOCUMENT_SECTION_KEYS.AVAILABLE_DOCUMENTS,
+  'T3': DOCUMENT_SECTION_KEYS.AVAILABLE_DOCUMENTS, 'T4RIF': DOCUMENT_SECTION_KEYS.AVAILABLE_DOCUMENTS,
   'moving_expense_receipts': DOCUMENT_SECTION_KEYS.MOVING_EXPENSES,
   'hotel_stay_receipts': DOCUMENT_SECTION_KEYS.MOVING_EXPENSES,
   'short_term_accommodation': DOCUMENT_SECTION_KEYS.MOVING_EXPENSES,

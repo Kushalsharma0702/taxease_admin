@@ -1,6 +1,8 @@
 // Comprehensive T1 Tax Form Types for CRA Data Entry
 
 export interface T1FormData {
+  /** Q1: T-slip types the client selected (storage keys, e.g. 'T4A_P'). */
+  availableDocumentTypes?: string[];
   clientId: string;
   filingYear: number;
   personalInfo: T1PersonalInfo;

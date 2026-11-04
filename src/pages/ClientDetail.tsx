@@ -1545,12 +1545,15 @@ export default function ClientDetail() {
           <TabsContent value="questionnaire" className="mt-6 animate-fade-in">
             {(() => {
               const SECTION_KEYWORDS: Record<string, string[]> = {
+                // short slip names (t3/t4a/t4e) are NOT keywords: they match inside ordinary filenames.
+                // Those slips are placed by their exact upload category (see CATEGORY_TO_SECTION_KEY).
+                available_documents: ['t4a_p', 't4a_oas', 't4rsp', 't4rif', 't5008'],
                 employment_income: ['form 16', 'salary', 'employment', 'employer', 't4'],
                 investment_income: ['investment', 'fd', 'dividend', 'interest certificate', 'mutual fund statement', 't5'],
                 foreign_property: ['foreign', 'us income', 'dtaa', 'overseas'],
                 medical_expenses: ['medical', 'hospital', 'health', 'pharmacy', 'doctor', 'medicine', 'clinic'],
                 charitable_donations: ['donation', 'charity', 'ngo', 'trust'],
-                moving_expenses: ['moving', 'relocation', 'transport'],
+                moving_expenses: ['moving', 'relocation', 'transport', 'air_ticket', 'air ticket', 'airfare', 'meals_receipt', 'hotel_stay', 'short_term', 'vehicle_change'],
                 self_employment: ['self-employment', 'freelance', 'consulting', 'invoice', 'business', 'gst'],
                 uber_income: ['uber', 'skip', 'doordash', 'lyft'],
                 rental_income: ['rent', 'rental', 'tenant', 'landlord'],
@@ -1558,6 +1561,7 @@ export default function ClientDetail() {
                 work_from_home: ['work from home', 't2200', 'home office'],
                 tuition: ['tuition', 't2202', 'education', 'school', 'college', 'university'],
                 childcare: ['daycare', 'childcare', 'babysitter', 'child care'],
+                child_art_sport: ['child_art_sport', 'art_sport', 'art & sport', 'fitness'],
                 union_dues: ['union', 'dues'],
                 professional_dues: ['professional', 'license', 'certification', 'membership'],
                 disability_tax_credit: ['disability', 'dtc'],
@@ -1567,36 +1571,40 @@ export default function ClientDetail() {
                 t183_form: ['t183'],
               };
 
+              // Numbering follows the CLIENT app (Q1 = available documents ... Q21 = deceased return).
               const SECTION_TITLES: Record<string, string> = {
-                employment_income: 'Employment Income',
-                investment_income: 'Investment Income',
-                foreign_property: 'Q1: Foreign Property (> CAN$100,000)',
-                medical_expenses: 'Q2: Medical Expenses',
-                charitable_donations: 'Q3: Charitable Donations',
-                moving_expenses: 'Q4: Moving Expenses',
-                self_employment: 'Q5: Self-Employment',
-                uber_income: 'Q5: Uber / Ride-Share Income',
-                rental_income: 'Q5: Rental Income',
-                capital_gains: 'Q7/Q8: Capital Gains / Property Sale',
-                work_from_home: 'Q9: Work From Home (T2200)',
-                tuition: 'Q10: Tuition (T2202)',
-                childcare: 'Q12: Daycare Expenses',
-                union_dues: 'Q11: Union Dues',
-                professional_dues: 'Q15: Professional Dues',
-                disability_tax_credit: 'Q19: Disability Tax Credit',
-                first_time_filer: 'Q13: First-Time Filer',
-                rrsp_contributions: 'Q16: RRSP / FHSA',
-                rent_property_tax: 'Q18: Rent / Property Tax',
+                available_documents: 'Q1: Available Documents (T-slips)',
+                employment_income: 'Q1: Employment Income Slips',
+                investment_income: 'Q1: Investment Income Slips',
+                foreign_property: 'Q2: Foreign Property (> CAN$100,000)',
+                medical_expenses: 'Q3: Medical Expenses',
+                charitable_donations: 'Q4: Charitable Donations',
+                moving_expenses: 'Q5: Moving Expenses',
+                self_employment: 'Q6: Self-Employment',
+                uber_income: 'Q6: Uber / Ride-Share Income',
+                rental_income: 'Q6: Rental Income',
+                capital_gains: 'Q8/Q9: Capital Gains / Property Sale',
+                work_from_home: 'Q10: Work From Home (T2200)',
+                tuition: 'Q11: Tuition (T2202)',
+                union_dues: 'Q12: Union Dues',
+                childcare: 'Q13: Daycare Expenses',
+                first_time_filer: 'Q14: First-Time Filer',
+                professional_dues: 'Q16: Professional Dues',
+                rrsp_contributions: 'Q17: RRSP / FHSA',
+                child_art_sport: "Q18: Children's Art & Sport",
+                rent_property_tax: 'Q19: Rent / Property Tax (Ontario/Quebec)',
+                disability_tax_credit: 'Q20: Disability Tax Credit',
+                deceased_return: 'Q21: Filing for a Deceased Person',
                 t183_form: 'T183 Form',
               };
 
               const SECTION_ORDER = [
-                'employment_income', 'investment_income', 'foreign_property',
+                'available_documents', 'employment_income', 'investment_income', 'foreign_property',
                 'medical_expenses', 'charitable_donations', 'moving_expenses',
                 'self_employment', 'uber_income', 'rental_income', 'capital_gains',
                 'work_from_home', 'tuition', 'union_dues', 'childcare',
-                'first_time_filer', 'professional_dues', 'rrsp_contributions',
-                'rent_property_tax', 'disability_tax_credit', 't183_form',
+                'first_time_filer', 'professional_dues', 'rrsp_contributions', 'child_art_sport',
+                'rent_property_tax', 'disability_tax_credit', 'deceased_return', 't183_form',
               ];
 
               // Documents were showing as their raw uploaded filename (e.g.

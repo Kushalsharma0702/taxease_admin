@@ -93,7 +93,8 @@ const SECTION_KEYWORDS: Record<string, string[]> = {
   [DOCUMENT_SECTION_KEYS.MEDICAL_EXPENSES]: ['medical', 'hospital', 'health', 'pharmacy', 'doctor', 'medicine', 'clinic'],
   [DOCUMENT_SECTION_KEYS.CHARITABLE_DONATIONS]: ['donation', 'donation_receipt', 'charity', 'ngo', 'trust'],
   [DOCUMENT_SECTION_KEYS.MOVING_EXPENSES]: ['moving', 'relocation', 'transport', 'moving_expense', 'hotel_stay',
-    'hotel stay', 'short_term', 'accommodation', 'vehicle_change', 'change_permit'],
+    'hotel stay', 'short_term', 'accommodation', 'vehicle_change', 'change_permit',
+    'air_ticket', 'air ticket', 'airfare', 'meals_receipt'],
   [DOCUMENT_SECTION_KEYS.SELF_EMPLOYMENT]: ['self-employment', 'freelance', 'consulting', 'invoice', 'business',
     'uber', 'lyft', 'doordash', 'skip', 'uber_statement', 'uber_income'],
   // 'insurance'/'house insurance' added — without it, a rental property's
@@ -103,8 +104,10 @@ const SECTION_KEYWORDS: Record<string, string[]> = {
   [DOCUMENT_SECTION_KEYS.CAPITAL_GAINS]: ['capital gain', 'stock', 'trading', 'mutual fund', 'redemption'],
   [DOCUMENT_SECTION_KEYS.WORK_FROM_HOME]: ['work from home', 't2200', 'home office', 't2200_spouse'],
   [DOCUMENT_SECTION_KEYS.TUITION]: ['tuition', 't2202', 'education', 'school', 'college', 'university'],
-  [DOCUMENT_SECTION_KEYS.CHILDCARE]: ['daycare', 'daycare_receipt', 'childcare', 'babysitter', 'child care',
-    'child_art_sport', 'sport', 'fitness'],
+  [DOCUMENT_SECTION_KEYS.CHILDCARE]: ['daycare', 'daycare_receipt', 'childcare', 'babysitter', 'child care'],
+  // Children's Art & Sport credit is its own question (Q18); it used to share Daycare's keywords.
+  [DOCUMENT_SECTION_KEYS.CHILD_ART_SPORT]: ['child_art_sport', 'art_sport', 'art & sport', 'sport/fitness', 'fitness'],
+  [DOCUMENT_SECTION_KEYS.AVAILABLE_DOCUMENTS]: ['t4a_p', 't4a_oas', 't4rsp', 't4rif', 't5008', 't4e', 't4a', 't4', 't5', 't3'],
   [DOCUMENT_SECTION_KEYS.UNION_DUES]: ['union', 'union_dues'],
   [DOCUMENT_SECTION_KEYS.PROFESSIONAL_DUES]: ['professional', 'professional_dues', 'license', 'certification', 'membership'],
   [DOCUMENT_SECTION_KEYS.DISABILITY]: ['disability', 'dtc', 'cra_disability'],
