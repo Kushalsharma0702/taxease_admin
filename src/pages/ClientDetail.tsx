@@ -1,4 +1,5 @@
 import { classifyDocSection, unavailableDocsForSection, withoutUploadedSlots, prettifyDocKey } from '@/lib/documentSections';
+import { summarizePayments } from '@/lib/paymentSummary';
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -377,12 +378,16 @@ export default function ClientDetail() {
     return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(str) ? str : str + 'Z');
   };
   const isRequestRow = (p: any) => !!p.isRequest || String(p.method || '').toLowerCase() === 'request';
-  const latestPaymentRequest = paymentRequests[0];
-  const paidSinceLatestRequest = latestPaymentRequest
-    ? payments
-        .filter((p: any) => !isRequestRow(p) && toUtcDate(p.created_at ?? p.createdAt) >= toUtcDate(latestPaymentRequest.createdAt))
-        .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0)
-    : 0;
+  // Total requested vs total received (see lib/paymentSummary.ts for why the total is not just client.totalAmount).
+  const paymentSummary = summarizePayments({
+    requestAmounts: paymentRequests.map((r) => r.amount),
+    recordedAmounts: payments.filter((p: any) => !isRequestRow(p)).map((p: any) => Number(p.amount) || 0),
+    storedTotal: client?.totalAmount,
+    storedPaid: client?.paidAmount,
+    storedStatus: client?.paymentStatus,
+  });
+  const { totalDue, receivedTotal, balanceDue } = paymentSummary;
+  const shownPaymentStatus = paymentSummary.status;
 
   const [assignableAdmins, setAssignableAdmins] = useState<Array<{ id: string; name: string }>>([]);
   const [isAssigning, setIsAssigning] = useState(false);
@@ -1317,25 +1322,28 @@ export default function ClientDetail() {
                 <CardContent className="space-y-4">
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Total Amount</span>
-                      <span className="text-xl font-bold">{formatCurrency(client.totalAmount > 0 ? client.totalAmount : (latestPaymentRequest?.amount ?? 0))}</span>
+                      <span className="text-muted-foreground">Total Requested</span>
+                      <span className="text-xl font-bold">{formatCurrency(totalDue)}</span>
                     </div>
-                    {client.totalAmount <= 0 && latestPaymentRequest && (
-                      <p className="text-xs text-muted-foreground -mt-1">Amount of the latest payment request</p>
+                    {paymentRequests.length > 1 && (
+                      <p className="text-xs text-muted-foreground -mt-1">Total of all {paymentRequests.length} payment requests</p>
                     )}
                     <Separator />
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Paid</span>
-                      <span className="font-semibold text-green-600">{formatCurrency(client.totalAmount > 0 || !latestPaymentRequest ? client.paidAmount : paidSinceLatestRequest)}</span>
+                      <span className="font-semibold text-green-600">{formatCurrency(receivedTotal)}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Balance</span>
-                      <span className="font-semibold text-orange-500">{formatCurrency(Math.max(0, client.totalAmount > 0 || !latestPaymentRequest ? client.totalAmount - client.paidAmount : latestPaymentRequest.amount - paidSinceLatestRequest))}</span>
+                      <span className="font-semibold text-orange-500">{formatCurrency(balanceDue)}</span>
                     </div>
+                    {totalDue > 0 && receivedTotal > totalDue + 0.004 && (
+                      <p className="text-xs text-muted-foreground -mt-1">Received {formatCurrency(receivedTotal - totalDue)} more than requested</p>
+                    )}
                     <Separator />
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Status</span>
-                      <StatusBadge status={client.paymentStatus} type="payment" />
+                      <StatusBadge status={shownPaymentStatus} type="payment" />
                     </div>
                   </div>
                   {hasPermission(PERMISSIONS.ADD_EDIT_PAYMENT) && (
@@ -1781,14 +1789,7 @@ export default function ClientDetail() {
           {/* Payments Tab */}
           <TabsContent value="payments" className="mt-6 animate-fade-in">
             {paymentRequests.length > 0 && (() => {
-              // Pending balance = the most recent request's amount, minus
-              // whatever's been paid since that request went out. Deliberately
-              // scoped to the LATEST request only rather than summing every
-              // request ever sent — a client who paid in full against an
-              // earlier request shouldn't show a phantom balance from a
-              // superseded ask.
-              const latest = paymentRequests[0];
-              const pendingBalance = latest.amount - paidSinceLatestRequest;
+              const pendingBalance = balanceDue;
               return (
                 <Card className="mb-6">
                   <CardHeader>
@@ -1797,7 +1798,7 @@ export default function ClientDetail() {
                   <CardContent className="space-y-3">
                     {pendingBalance > 0.004 && (
                       <div className="flex items-center justify-between p-3 rounded-lg border border-orange-500/30 bg-orange-500/10">
-                        <span className="text-sm font-medium text-orange-700">Pending balance (last request)</span>
+                        <span className="text-sm font-medium text-orange-700">Pending balance</span>
                         <span className="text-lg font-bold text-orange-600">{formatCurrency(pendingBalance)}</span>
                       </div>
                     )}
