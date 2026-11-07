@@ -635,7 +635,7 @@ export function T1CRAReadyForm({
       {/* Q6 is three sections, in the order the client fills them, each followed by its own documents. */}
       {/* Q6a: Uber / Skip / DoorDash */}
       <T1CRASection
-        title="Q6a: Uber / Skip / DoorDash"
+        title="Q6: Self-Employment - Uber / Skip / DoorDash"
         icon={<Building2 className="h-5 w-5 text-primary" />}
         applicable={hasUberSection}
         sectionData={{ ...(se?.uberIncome as unknown as Record<string, unknown>), incomeByService: Object.fromEntries(rideShareIncomes.map((r) => [r.label, r.amount])) }}
@@ -733,7 +733,7 @@ export function T1CRAReadyForm({
 
       {/* Q6b: General Business */}
       <T1CRASection
-        title="Q6b: General Business"
+        title="Q6: Self-Employment - General Business"
         icon={<Building2 className="h-5 w-5 text-primary" />}
         applicable={hasGeneralBusinessSection}
         sectionData={se?.generalBusiness as unknown as Record<string, unknown>}
@@ -907,7 +907,7 @@ export function T1CRAReadyForm({
 
       {/* Q6c: Rental Income */}
       <T1CRASection
-        title="Q6c: Rental Income"
+        title="Q6: Self-Employment - Rental Income"
         icon={<Building2 className="h-5 w-5 text-primary" />}
         applicable={hasRentalSection}
         sectionData={{ rentalIncome: se?.rentalIncome } as unknown as Record<string, unknown>}
