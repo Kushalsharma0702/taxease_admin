@@ -1,3 +1,4 @@
+import { classifyDocSection, unavailableDocsForSection, prettifyDocKey } from '@/lib/documentSections';
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -36,7 +37,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { T1CRAReadyForm } from '@/components/client/T1CRAReadyForm';
-import { RequestedDocsContext } from '@/components/client/QuestionDocuments';
+import { RequestedDocsContext, UnavailableDocsContext } from '@/components/client/QuestionDocuments';
+import { convertApiDataToFormData } from '@/lib/t1FormAdapter';
 import { DocumentActionRow } from '@/components/client/DocumentActionRow';
 import { PIPELINE_STATUS_LABELS, ADMIN_SETTABLE_STATUSES, FILED_STATUS_HELP, COMPLETED_STATUS_HELP, ClientStatus, PERMISSIONS, Note, Document as DocType, T1Question, DocumentStatus, TaxFile } from '@/types';
 import {
@@ -498,6 +500,17 @@ export default function ClientDetail() {
         setHasLoadedAuditLogs(true);
       });
   }, [activeTab, hasLoadedAuditLogs, client, t1FormData, allFilings, payments, documents, taxFiles, toast]);
+
+  // Upload slots the client marked "not available" in the app — shown on both
+  // the Detailed Data and Documents tabs so staff can tell them apart from
+  // documents the client simply hasn't uploaded yet.
+  const unavailableDocs = useMemo<Record<string, unknown>>(() => {
+    try {
+      return convertApiDataToFormData(t1FormData)?.unavailableDocuments || {};
+    } catch {
+      return {};
+    }
+  }, [t1FormData]);
 
   if (isLoadingClient) {
     return (
@@ -964,6 +977,7 @@ export default function ClientDetail() {
 
   return (
     <RequestedDocsContext.Provider value={requestedDocNames}>
+    <UnavailableDocsContext.Provider value={unavailableDocs}>
     <DashboardLayout
       title=""
       breadcrumbs={[
@@ -1566,33 +1580,6 @@ export default function ClientDetail() {
           {/* Documents Tab — only show T1 sections that have uploaded documents */}
           <TabsContent value="questionnaire" className="mt-6 animate-fade-in">
             {(() => {
-              const SECTION_KEYWORDS: Record<string, string[]> = {
-                // short slip names (t3/t4a/t4e) are NOT keywords: they match inside ordinary filenames.
-                // Those slips are placed by their exact upload category (see CATEGORY_TO_SECTION_KEY).
-                available_documents: ['t4a_p', 't4a_oas', 't4rsp', 't4rif', 't5008'],
-                employment_income: ['form 16', 'salary', 'employment', 'employer', 't4'],
-                investment_income: ['investment', 'fd', 'dividend', 'interest certificate', 'mutual fund statement', 't5'],
-                foreign_property: ['foreign', 'us income', 'dtaa', 'overseas'],
-                medical_expenses: ['medical', 'hospital', 'health', 'pharmacy', 'doctor', 'medicine', 'clinic'],
-                charitable_donations: ['donation', 'charity', 'ngo', 'trust'],
-                moving_expenses: ['moving', 'relocation', 'transport', 'air_ticket', 'air ticket', 'airfare', 'meals_receipt', 'hotel_stay', 'short_term', 'vehicle_change'],
-                self_employment: ['self-employment', 'freelance', 'consulting', 'invoice', 'business', 'gst'],
-                uber_income: ['uber', 'skip', 'doordash', 'lyft'],
-                rental_income: ['rent', 'rental', 'tenant', 'landlord'],
-                capital_gains: ['capital gain', 'stock', 'trading', 'property sale'],
-                work_from_home: ['work from home', 't2200', 'home office'],
-                tuition: ['tuition', 't2202', 'education', 'school', 'college', 'university'],
-                childcare: ['daycare', 'childcare', 'babysitter', 'child care'],
-                child_art_sport: ['child_art_sport', 'art_sport', 'art & sport', 'fitness'],
-                union_dues: ['union', 'dues'],
-                professional_dues: ['professional', 'license', 'certification', 'membership'],
-                disability_tax_credit: ['disability', 'dtc'],
-                first_time_filer: ['first time', 'landing'],
-                rrsp_contributions: ['rrsp', 'fhsa'],
-                rent_property_tax: ['property tax', 'rent receipt'],
-                t183_form: ['t183'],
-              };
-
               // Numbering follows the CLIENT app (Q1 = available documents ... Q21 = deceased return).
               const SECTION_TITLES: Record<string, string> = {
                 available_documents: 'Q1: Available Documents (T-slips)',
@@ -1649,14 +1636,10 @@ export default function ClientDetail() {
                   .join(' ');
               };
 
+              // Shared with the Detailed Data tab so both tabs agree on placement.
               const classifyDoc = (doc: any): string => {
-                if (doc.sectionKey && SECTION_TITLES[doc.sectionKey]) return doc.sectionKey;
-                const nameLower = (doc.name || '').toLowerCase();
-                const typeLower = (doc.document_type || doc.type || '').toLowerCase();
-                for (const [sk, kws] of Object.entries(SECTION_KEYWORDS)) {
-                  if (kws.some(kw => nameLower.includes(kw) || typeLower.includes(kw))) return sk;
-                }
-                return '__other__';
+                const sk = classifyDocSection(doc, SECTION_TITLES);
+                return SECTION_TITLES[sk] ? sk : '__other__';
               };
 
               const grouped = new Map<string, any[]>();
@@ -1666,9 +1649,15 @@ export default function ClientDetail() {
                 grouped.get(sk)!.push(doc);
               }
 
+              const unavailableBySection = new Map<string, string[]>();
+              for (const sk of SECTION_ORDER) {
+                const keys = unavailableDocsForSection(unavailableDocs, sk);
+                if (keys.length) unavailableBySection.set(sk, keys);
+              }
+
               const ordered: Array<[string, any[]]> = [];
               for (const sk of SECTION_ORDER) {
-                if (grouped.has(sk)) ordered.push([sk, grouped.get(sk)!]);
+                if (grouped.has(sk) || unavailableBySection.has(sk)) ordered.push([sk, grouped.get(sk) || []]);
               }
               if (grouped.has('__other__')) ordered.push(['__other__', grouped.get('__other__')!]);
 
@@ -1726,6 +1715,20 @@ export default function ClientDetail() {
                           </Badge>
                         </div>
                         <div className="space-y-2">
+                          {(unavailableBySection.get(sectionKey) || []).map((key) => (
+                            <div
+                              key={`unavailable-${key}`}
+                              className="flex items-center justify-between p-3 rounded-lg border border-dashed bg-muted/30"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">{prettifyDocKey(key)}</p>
+                                <p className="text-xs text-muted-foreground">Client marked this document as not available</p>
+                              </div>
+                              <Badge variant="outline" className="text-xs shrink-0 bg-muted text-muted-foreground">
+                                Not available
+                              </Badge>
+                            </div>
+                          ))}
                           {docs.map((doc: any) => (
                             <DocumentActionRow
                               key={doc.id}
@@ -2434,6 +2437,7 @@ export default function ClientDetail() {
       </AlertDialog>
 
     </DashboardLayout>
+    </UnavailableDocsContext.Provider>
     </RequestedDocsContext.Provider>
   );
 }

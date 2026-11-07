@@ -129,6 +129,19 @@ export function convertApiDataToFormData(t1Data: any) {
   const safeValue = (val: any, defaultVal: any = '') => {
     return val !== undefined && val !== null && val !== 'N/A' ? val : defaultVal;
   };
+
+  // Phones are stored digits-only with the country code ("+1 416..." ->
+  // "1416..."). Show the '+' and split off "+1" so staff don't read the
+  // country code as part of the number.
+  const formatPhone = (val: any): string => {
+    const raw = safeValue(val);
+    if (!raw) return '';
+    const digits = String(raw).replace(/\D/g, '');
+    if (!digits) return String(raw);
+    if (digits.length === 11 && digits.startsWith('1')) return `+1 ${digits.slice(1)}`;
+    if (String(raw).trim().startsWith('+') || digits.length > 10) return `+${digits}`;
+    return digits;
+  };
   
   // Helper to convert array data with proper field mapping
   const convertArray = (arr: any[], fieldMap: Record<string, string> = {}) => {
@@ -367,7 +380,7 @@ export function convertApiDataToFormData(t1Data: any) {
     sin: safeValue(spouseSrc.sin),
     dateOfBirth: safeValue(spouseSrc.dateOfBirth),
     email: safeValue(spouseSrc.email),
-    phoneNumber: safeValue(spouseSrc.phoneNumber),
+    phoneNumber: formatPhone(spouseSrc.phoneNumber),
     isCanadianCitizen: spouseSrc.isCanadianCitizen === true,
     dateOfMarriageOrSeparation: safeValue(spouseSrc.dateOfMarriageOrSeparation),
     street: safeValue(spouseSrc.street),
@@ -404,7 +417,7 @@ export function convertApiDataToFormData(t1Data: any) {
       currentAddress: addressObj,
       mailingAddressSame: true,
       mailingAddress: addressObj,
-      phone: safeValue(personalInfo.phoneNumber || personalInfo.phone),
+      phone: formatPhone(personalInfo.phoneNumber || personalInfo.phone),
       email: safeValue(personalInfo.email),
       directDeposit: personalInfo.directDeposit === true,
       bankInfo: personalInfo.bankInfo || null,
@@ -525,5 +538,7 @@ export function convertApiDataToFormData(t1Data: any) {
     // rental co-owner extra details under composite keys like
     // "rental_coowner1_sin" / "_dob" / "_street" / "_city" / "_province" / "_postal".
     uploadedDocuments: answersMap.uploadedDocuments || {},
+    // Upload slots the client explicitly marked "not available" in the app.
+    unavailableDocuments: answersMap.unavailableDocuments || {},
   };
 }

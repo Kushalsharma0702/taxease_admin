@@ -318,10 +318,15 @@ export function T1CRAReadyForm({
             {formData.personalInfo.spouseInfo.dateOfMarriageOrSeparation && (
               <CopyableField label="Date of Marriage / Separation" value={formatDate(formData.personalInfo.spouseInfo.dateOfMarriageOrSeparation)} />
             )}
-            {formData.personalInfo.spouseInfo.marriageInTaxYear && (
+            {/* Only show the answer that matches the CURRENT marital status: a
+                client who briefly picked "Separated" and switched back to
+                "Married" can still have a stale separation answer stored. */}
+            {formData.personalInfo.spouseInfo.marriageInTaxYear &&
+              ['married', 'common-law'].includes(String(formData.personalInfo.maritalStatus || '').toLowerCase()) && (
               <CopyableField label="Married in Tax Year" value="Yes" />
             )}
-            {formData.personalInfo.spouseInfo.separationInTaxYear && (
+            {formData.personalInfo.spouseInfo.separationInTaxYear &&
+              ['separated', 'divorced', 'widowed'].includes(String(formData.personalInfo.maritalStatus || '').toLowerCase()) && (
               <CopyableField label="Separated in Tax Year" value="Yes" />
             )}
             {formData.personalInfo.spouseInfo.receivesSpousePayment && (

@@ -25,11 +25,17 @@ import {
 import { Document as DocType, DocumentStatus } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { DOCUMENT_SECTION_KEYS, CATEGORY_TO_SECTION_KEY, DocumentSectionKey } from '@/lib/api/config';
+import { classifyDocSection, unavailableDocsForSection, prettifyDocKey } from '@/lib/documentSections';
 
 // Names of missing documents already requested from the client. Provided once
 // by ClientDetail so every section can show a "Requested" badge without prop
 // drilling through the many QuestionDocuments instances.
 export const RequestedDocsContext = createContext<Set<string>>(new Set());
+
+// The client's answers `unavailableDocuments` map ({slotKey: true}), provided
+// once by ClientDetail so each section can list what the client marked
+// "not available" instead of silently showing it as never uploaded.
+export const UnavailableDocsContext = createContext<Record<string, unknown>>({});
 
 interface QuestionDocumentsProps {
   sectionKey: keyof typeof DOCUMENT_SECTION_KEYS;
@@ -88,35 +94,7 @@ const STATUS_CONFIG: Record<string, { label: string; className: string; icon: st
   reupload_requested: { label: 'Re-upload Requested', className: 'bg-orange-500/10 text-orange-600 border-orange-500/30', icon: '🔁' },
 };
 
-// Keywords to match documents to sections
-const SECTION_KEYWORDS: Record<string, string[]> = {
-  [DOCUMENT_SECTION_KEYS.MEDICAL_EXPENSES]: ['medical', 'hospital', 'health', 'pharmacy', 'doctor', 'medicine', 'clinic'],
-  [DOCUMENT_SECTION_KEYS.CHARITABLE_DONATIONS]: ['donation', 'donation_receipt', 'charity', 'ngo', 'trust'],
-  [DOCUMENT_SECTION_KEYS.MOVING_EXPENSES]: ['moving', 'relocation', 'transport', 'moving_expense', 'hotel_stay',
-    'hotel stay', 'short_term', 'accommodation', 'vehicle_change', 'change_permit',
-    'air_ticket', 'air ticket', 'airfare', 'meals_receipt'],
-  [DOCUMENT_SECTION_KEYS.SELF_EMPLOYMENT]: ['self-employment', 'freelance', 'consulting', 'invoice', 'business',
-    'uber', 'lyft', 'doordash', 'skip', 'uber_statement', 'uber_income'],
-  // 'insurance'/'house insurance' added — without it, a rental property's
-  // house-insurance-statement upload matched nothing here and only ever
-  // showed in the generic Documents list, never inline under Rental Income.
-  [DOCUMENT_SECTION_KEYS.RENTAL_INCOME]: ['rent', 'rental', 'tenant', 'landlord', 'insurance', 'house insurance'],
-  [DOCUMENT_SECTION_KEYS.CAPITAL_GAINS]: ['capital gain', 'stock', 'trading', 'mutual fund', 'redemption'],
-  [DOCUMENT_SECTION_KEYS.WORK_FROM_HOME]: ['work from home', 't2200', 'home office', 't2200_spouse'],
-  [DOCUMENT_SECTION_KEYS.TUITION]: ['tuition', 't2202', 'education', 'school', 'college', 'university'],
-  [DOCUMENT_SECTION_KEYS.CHILDCARE]: ['daycare', 'daycare_receipt', 'childcare', 'babysitter', 'child care'],
-  // Children's Art & Sport credit is its own question (Q18); it used to share Daycare's keywords.
-  [DOCUMENT_SECTION_KEYS.CHILD_ART_SPORT]: ['child_art_sport', 'art_sport', 'art & sport', 'sport/fitness', 'fitness'],
-  [DOCUMENT_SECTION_KEYS.AVAILABLE_DOCUMENTS]: ['t4a_p', 't4a_oas', 't4rsp', 't4rif', 't5008', 't4e', 't4a', 't4', 't5', 't3'],
-  [DOCUMENT_SECTION_KEYS.UNION_DUES]: ['union', 'union_dues'],
-  [DOCUMENT_SECTION_KEYS.PROFESSIONAL_DUES]: ['professional', 'professional_dues', 'license', 'certification', 'membership'],
-  [DOCUMENT_SECTION_KEYS.DISABILITY]: ['disability', 'dtc', 'cra_disability'],
-  [DOCUMENT_SECTION_KEYS.RRSP]: ['rrsp', 'fhsa', 'rrsp_fhsa'],
-  [DOCUMENT_SECTION_KEYS.INVESTMENT]: ['investment', 'dividend', 'interest certificate'],
-  [DOCUMENT_SECTION_KEYS.FOREIGN_PROPERTY]: ['foreign', 'us income', 'overseas'],
-  [DOCUMENT_SECTION_KEYS.RENT_PROPERTY_TAX]: ['property tax', 'rl31', 'rl-31', 'province_filer', 'province filer'],
-  [DOCUMENT_SECTION_KEYS.DECEASED_RETURN]: ['deceased', 'submitter_id', 'death'],
-};
+// Section matching lives in '@/lib/documentSections' (shared with the Documents tab).
 
 export function QuestionDocuments({
   sectionKey,
@@ -144,27 +122,30 @@ export function QuestionDocuments({
   // Get documents for this section using multiple matching strategies
   const sectionKeyValue = DOCUMENT_SECTION_KEYS[sectionKey];
 
+  // Same classifier as the Documents tab, so both tabs list identical docs.
+  // Uber/ride-share docs are their own group on the Documents tab but render
+  // inside the Self-Employment section here (split again via docFilter).
+  const acceptsSection = (sk: string) =>
+    sk === sectionKeyValue ||
+    (sectionKeyValue === DOCUMENT_SECTION_KEYS.SELF_EMPLOYMENT && sk === 'uber_income');
+
   const sectionDocs = useMemo(() => {
-    const keywords = SECTION_KEYWORDS[sectionKeyValue] || [];
-    
-    return documents.filter(d => {
-      // Match by explicit sectionKey
-      if (d.sectionKey === sectionKeyValue) return true;
-      
-      // Match by document name containing section keywords
-      const docNameLower = d.name.toLowerCase();
-      if (keywords.some(keyword => docNameLower.includes(keyword.toLowerCase()))) {
-        return true;
-      }
-      
-      // Match by document type
-      if (d.type && keywords.some(keyword => d.type?.toLowerCase().includes(keyword.toLowerCase()))) {
-        return true;
-      }
-      
-      return false;
-    }).filter(d => !docFilter || docFilter(d));
+    return documents
+      .filter((d) => acceptsSection(classifyDocSection(d)))
+      .filter((d) => !docFilter || docFilter(d));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documents, sectionKeyValue, docFilter]);
+
+  const unavailableMap = useContext(UnavailableDocsContext);
+  const unavailableDocs = useMemo(() => {
+    const keys = [
+      ...unavailableDocsForSection(unavailableMap, sectionKeyValue),
+      ...(sectionKeyValue === DOCUMENT_SECTION_KEYS.SELF_EMPLOYMENT
+        ? unavailableDocsForSection(unavailableMap, 'uber_income')
+        : []),
+    ];
+    return keys.filter((k) => !docFilter || docFilter({ name: k, type: k } as DocType));
+  }, [unavailableMap, sectionKeyValue, docFilter]);
 
   // Newest upload first, per document-type slot, so a replaced file's older
   // version renders below the current one instead of in upload order.
@@ -184,7 +165,7 @@ export function QuestionDocuments({
   }, [orderedSectionDocs]);
 
   // If no documents and no required documents, don't show the section
-  if (sectionDocs.length === 0 && requiredDocuments.length === 0) {
+  if (sectionDocs.length === 0 && requiredDocuments.length === 0 && unavailableDocs.length === 0) {
     return null;
   }
 
@@ -281,7 +262,7 @@ export function QuestionDocuments({
   // name/keyword match against the label produces false "Missing" flags for
   // documents the client already uploaded. Once anything has landed in this
   // section, treat its required documents as fulfilled rather than guessing.
-  const missingRequiredDocs = sectionDocs.length > 0 ? [] : requiredDocuments;
+  const missingRequiredDocs = sectionDocs.length > 0 || unavailableDocs.length > 0 ? [] : requiredDocuments;
 
   return (
     <div className="mt-4 p-4 rounded-lg border border-dashed border-border/60 bg-muted/20">
@@ -392,6 +373,27 @@ export function QuestionDocuments({
             </div>
           );
         })}
+
+        {/* Marked "not available" by the client in the app */}
+        {unavailableDocs.map((key) => (
+          <div
+            key={`unavailable-${key}`}
+            className="flex items-center justify-between p-3 rounded-lg border border-dashed bg-muted/30"
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 bg-muted">
+                <AlertCircle className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{prettifyDocKey(key)}</p>
+                <p className="text-xs text-muted-foreground">Client marked this document as not available</p>
+              </div>
+            </div>
+            <Badge variant="outline" className="text-xs shrink-0 bg-muted text-muted-foreground border-border">
+              ⚪ Not available
+            </Badge>
+          </div>
+        ))}
 
         {/* Missing Required Documents */}
         {missingRequiredDocs.map((reqDoc, idx) => (
