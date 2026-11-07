@@ -89,15 +89,19 @@ function AddressBreakdown({ data, prefix }: { data: Record<string, any>; prefix:
 // Q1 slips: storage keys the in-form upload buttons use -> what the client sees.
 const T_SLIP_LABELS: Record<string, string> = { T4A_P: 'T4A(P)', T4A_OAS: 'T4A(OAS)' };
 const T_SLIP_DOC_PATTERN = /(^|[^A-Za-z0-9])T(3|4|5|4A|5008|4RSP|4E|4RIF)([^A-Za-z0-9]|$)/i;
-const isTSlipDoc = (d: { name?: string; type?: string | null }) =>
-  T_SLIP_DOC_PATTERN.test(`${d.name || ''} ${d.type || ''}`);
+// What the app tagged the upload with ("T4", "T4A_P", "uber_statement"). Uploaded files are
+// usually phone photos named "scaled_<uuid>.jpg", so the name alone never identifies the document.
+type DocFields = { name?: string; type?: string | null; document_type?: string | null; documentType?: string | null };
+const docText = (d: DocFields) =>
+  `${d.name || ''} ${d.type || ''} ${String(d.document_type ?? d.documentType ?? '').replace(/_/g, ' ')}`;
+const isTSlipDoc = (d: DocFields) => T_SLIP_DOC_PATTERN.test(docText(d));
 
 // Ride-share/delivery uploads (Uber, Skip, DoorDash, Lyft, U-Ride statements
 // and the car purchase receipt) vs. everything else filed under
 // self-employment - lets the two income sub-sections each show their own docs.
 const RIDE_SHARE_DOC_PATTERN = /uber|skip|doordash|lyft|u-ride|car_purchase|car purchase/i;
-const isRideShareDoc = (d: { name?: string; type?: string | null }) =>
-  RIDE_SHARE_DOC_PATTERN.test(`${d.name || ''} ${d.type || ''}`);
+const isRideShareDoc = (d: DocFields) =>
+  RIDE_SHARE_DOC_PATTERN.test(`${d.name || ''} ${d.type || ''} ${d.document_type ?? d.documentType ?? ''}`);
 
 export function T1CRAReadyForm({ 
   clientId, 
