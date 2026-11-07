@@ -191,7 +191,8 @@ export default function Clients() {
       render: (client: Client) => (
         <div className="flex items-center gap-1.5">
           <StatusBadge status={client.status} type="client" />
-          {client.hasPendingChangesRequest && (
+          {/* The status badge already says "Changes Requested"; the chip is only for older rows where the status moved on. */}
+          {client.hasPendingChangesRequest && client.status !== 'changes_requested' && (
             <span
               className="inline-flex items-center gap-1 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive whitespace-nowrap"
               title="Client declined the uploaded return and requested changes — open the client to see their feedback."

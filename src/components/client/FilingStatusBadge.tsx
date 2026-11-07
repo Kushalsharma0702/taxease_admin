@@ -20,6 +20,7 @@ const STATUS_CONFIG: Record<ClientStatus, { label: string; variant: 'default' | 
   payment_completed: { label: 'Ready to Prepare', variant: 'outline', className: 'border-teal-500 text-teal-600' },
   in_preparation: { label: 'Work-in-Progress', variant: 'default', className: 'bg-blue-600' },
   awaiting_approval: { label: 'Sent for Approval', variant: 'outline', className: 'border-yellow-500 text-yellow-600' },
+  changes_requested: { label: 'Changes Requested', variant: 'outline', className: 'border-amber-500 text-amber-600' },
   approved_by_client: { label: 'Approval Received', variant: 'outline', className: 'border-violet-500 text-violet-600' },
   filed: { label: 'E-Filing Completed', variant: 'default', className: 'bg-green-600' },
   completed: { label: 'E-Filing Completed', variant: 'default', className: 'bg-green-700' },

@@ -14,6 +14,7 @@ const clientStatusColors: Record<ClientStatus, string> = {
   payment_completed: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
   in_preparation: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400',
   awaiting_approval: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
+  changes_requested: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
   approved_by_client: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
   filed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
   completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',

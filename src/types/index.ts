@@ -29,6 +29,7 @@ export type FilingPipelineStatus =
   | 'payment_completed'
   | 'in_preparation'
   | 'awaiting_approval'
+  | 'changes_requested'
   | 'approved_by_client'
   | 'filed'
   | 'completed'
@@ -237,6 +238,7 @@ export const PIPELINE_STATUS_LABELS: Record<FilingPipelineStatus, string> = {
   payment_completed: 'Ready to Prepare',
   in_preparation: 'Work-in-Progress',
   awaiting_approval: 'Sent for Approval',
+  changes_requested: 'Changes Requested',
   approved_by_client: 'Approval Received',
   // 'filed' is legacy only (no longer settable) and reads as the final step.
   filed: 'E-Filing Completed',
@@ -263,6 +265,7 @@ export const ADMIN_SETTABLE_STATUSES: FilingPipelineStatus[] = [
   'payment_completed',
   'in_preparation',
   'awaiting_approval',
+  'changes_requested',
   'completed',
   'cancelled',
 ];
