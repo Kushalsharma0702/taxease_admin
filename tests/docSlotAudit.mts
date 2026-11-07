@@ -207,6 +207,7 @@ const INLINE: Row[] = [
  }
 ];
 const LABELS: Row[] = [
+ {"key": "Rent / Property Tax Receipt", "serverSk": "rent_property_tax"},
  {
   "key": "Disability Approval form",
   "serverSk": "disability_tax_credit"

@@ -7,6 +7,8 @@ import { CopyableField } from './CopyableField';
 import { CopyableTable } from './CopyableTable';
 import { T1CRASection } from './T1CRASection';
 import { QuestionDocuments } from './QuestionDocuments';
+import { getRideShareIncomes } from '@/lib/rideShare';
+import { spouseDateLabel, spouseDateApplies } from '@/lib/spouseDate';
 import { getT1FormData } from '@/data/mockT1FormData';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency as formatCurrencyUtil, formatDate as formatDateUtil } from '@/lib/utils';
@@ -103,17 +105,6 @@ const RIDE_SHARE_DOC_PATTERN = /uber|skip|doordash|lyft|u-ride|car_purchase|car 
 const isRideShareDoc = (d: DocFields) =>
   RIDE_SHARE_DOC_PATTERN.test(`${d.name || ''} ${d.type || ''} ${d.document_type ?? d.documentType ?? ''}`);
 
-
-// The app saves each ride-share/delivery service's income next to its statement upload, in the
-// "uploaded documents" map as uber_income_<service> (e.g. uber_income_uber_ride = "36658").
-const rideShareServiceLabel = (key: string) =>
-  key.split(/[_-]+/).filter(Boolean)
-    .map((w) => (w.toLowerCase() === 'doordash' ? 'DoorDash' : w.charAt(0).toUpperCase() + w.slice(1)))
-    .join(' ');
-const getRideShareIncomes = (uploaded: Record<string, unknown> | undefined | null) =>
-  Object.entries(uploaded || {})
-    .filter(([k, v]) => k.startsWith('uber_income_') && v !== '' && v !== null && v !== undefined && !isNaN(Number(v)))
-    .map(([k, v]) => ({ key: k, label: rideShareServiceLabel(k.slice('uber_income_'.length)), amount: Number(v) }));
 
 export function T1CRAReadyForm({ 
   clientId, 
@@ -340,20 +331,10 @@ export function T1CRAReadyForm({
             {/* One stored date serves several meanings. Label it by the CURRENT marital status
                 and hide it when it can't apply (e.g. "married" but not married this year). */}
             {(() => {
-              const status = String(formData.personalInfo.maritalStatus || '').toLowerCase();
-              const date = formData.personalInfo.spouseInfo.dateOfMarriageOrSeparation;
-              const labels: Record<string, string> = {
-                married: 'Date of Marriage',
-                'common-law': 'Date of Common-Law',
-                separated: 'Date of Separation',
-                divorced: 'Date of Divorce',
-                widowed: 'Date of Death',
-              };
-              const label = labels[status];
-              if (!date || !label) return null;
-              const marriedGroup = status === 'married' || status === 'common-law';
-              if (marriedGroup && !formData.personalInfo.spouseInfo.marriageInTaxYear) return null;
-              return <CopyableField label={label} value={formatDate(date)} />;
+              const sp = formData.personalInfo.spouseInfo;
+              const label = spouseDateLabel(formData.personalInfo.maritalStatus);
+              if (!sp.dateOfMarriageOrSeparation || !label || !spouseDateApplies(formData.personalInfo.maritalStatus, sp.marriageInTaxYear)) return null;
+              return <CopyableField label={label} value={formatDate(sp.dateOfMarriageOrSeparation)} />;
             })()}
             {/* Only show the answer that matches the CURRENT marital status: a
                 client who briefly picked "Separated" and switched back to

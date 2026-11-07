@@ -5,6 +5,9 @@ import { Client, Document, Payment, Note, TaxFile, T1Questionnaire } from '@/typ
 import { formatCurrency, formatDate } from './utils';
 import { getT1FormData } from '@/data/mockT1FormData';
 import { convertApiDataToFormData } from './t1FormAdapter';
+import { classifyDocSection } from './documentSections';
+import { getRideShareIncomes } from './rideShare';
+import { spouseDateLabel, spouseDateApplies } from './spouseDate';
 import { CATEGORY_TO_SECTION_KEY } from './api/config';
 
 interface PDFExportOptions {
@@ -39,38 +42,46 @@ const T1_SECTIONS = [
   { key: 'INVESTMENT_INCOME', title: 'Investment Income', dataKey: 'investmentIncome' },
 ];
 
-// Keywords to match documents to sections
-const SECTION_KEYWORDS: Record<string, string[]> = {
-  'FOREIGN_PROPERTY': ['foreign', 'us income', 'dtaa', 'overseas'],
-  'MEDICAL_EXPENSES': ['medical', 'hospital', 'health', 'pharmacy', 'doctor', 'medicine', 'clinic', 'fortis', 'apollo'],
-  'CHARITABLE_DONATIONS': ['donation', 'charity', 'ngo', 'trust', 'pm cares', 'cry', 'charitable'],
-  'MOVING_EXPENSES': ['moving', 'relocation', 'transport'],
-  'SELF_EMPLOYMENT': ['self-employment', 'freelance', 'consulting', 'invoice', 'business', 'gst', 'uber', 'skip'],
-  'WORK_FROM_HOME': ['work from home', 't2200', 'home office'],
-  'TUITION': ['tuition', 't2202', 'education', 'school', 'college', 'university'],
-  'UNION_DUES': ['union', 'dues'],
-  'DAYCARE': ['daycare', 'childcare', 'babysitter', 'child care'],
-  'PROFESSIONAL_DUES': ['professional', 'license', 'certification', 'membership'],
-  'RRSP': ['rrsp', 'fhsa', 'ppf', 'epf', 'nps', 'lic', 'insurance premium'],
-  'DISABILITY': ['disability', 'dtc'],
-  'CAPITAL_GAINS': ['capital gain', 'stock', 'trading', 'zerodha', 'groww', 'mutual fund', 'redemption'],
-  'RENTAL_INCOME': ['rent', 'rental', 'tenant', 'property tax', 'landlord'],
-  'EMPLOYMENT_INCOME': ['form 16', 'salary', 'employment', 'employer'],
-  'INVESTMENT_INCOME': ['investment', 'fd', 'dividend', 'interest certificate', 'mutual fund statement'],
+// Which T1 question a document belongs to is decided by classifyDocSection - the same function behind the
+// admin's Documents tab and Detailed Data tab - so the PDF lists exactly the documents the admin sees under
+// each question. (It used to match on the file NAME, which for phone photos is "scaled_<id>.jpg", so photos
+// never matched and several questions listed no documents at all.)
+const PDF_SECTION_TO_CLASSIFIED: Record<string, string[]> = {
+  EMPLOYMENT_INCOME: ['employment_income'],
+  INVESTMENT_INCOME: ['investment_income'],
+  FOREIGN_PROPERTY: ['foreign_property'],
+  MEDICAL_EXPENSES: ['medical_expenses'],
+  CHARITABLE_DONATIONS: ['charitable_donations'],
+  MOVING_EXPENSES: ['moving_expenses'],
+  SELF_EMPLOYMENT: ['self_employment', 'uber_income'],
+  RENTAL_INCOME: ['rental_income'],
+  RENT_PROPERTY_TAX: ['rent_property_tax'],
+  WORK_FROM_HOME: ['work_from_home'],
+  TUITION: ['tuition'],
+  UNION_DUES: ['union_dues'],
+  DAYCARE: ['childcare'],
+  CHILD_ART_SPORT: ['child_art_sport'],
+  PROFESSIONAL_DUES: ['professional_dues'],
+  RRSP: ['rrsp_contributions'],
+  DISABILITY: ['disability_tax_credit'],
+  DECEASED_RETURN: ['deceased_return'],
+  AVAILABLE_DOCUMENTS: ['available_documents'],
 };
 
 function getDocsForSection(sectionKey: string, documents: Document[]): Document[] {
-  const keywords = SECTION_KEYWORDS[sectionKey] || [];
-  return documents.filter((d) => {
-    if (d.sectionKey === sectionKey) return true;
-    const docNameLower = d.name.toLowerCase();
-    return keywords.some(keyword => docNameLower.includes(keyword.toLowerCase()));
-  });
+  const wanted = PDF_SECTION_TO_CLASSIFIED[sectionKey] || [];
+  return documents.filter((d) => wanted.includes(classifyDocSection(d as any)));
 }
 
-function formatAddress(address: string | { street: string; city: string; province: string; postalCode: string }): string {
+function formatAddress(address: string | { street: string; city: string; province: string; postalCode: string; aptSuite?: string; country?: string }): string {
   if (typeof address === 'string') return address;
-  return `${address.street}, ${address.city}, ${address.province} ${address.postalCode}`;
+  return [
+    address.street,
+    address.aptSuite,
+    address.city,
+    `${address.province || ''} ${address.postalCode || ''}`.trim(),
+    address.country,
+  ].filter(Boolean).join(', ');
 }
 
 // Structured addresses are flat sibling fields (e.g. oldAddressStreet,
@@ -81,6 +92,30 @@ function formatAddress(address: string | { street: string; city: string; provinc
 // falls back to the legacy combined string for forms submitted before the
 // relevant breakdown existed. `prefix` is 'oldAddress'/'newAddress' for
 // Moving Expense, 'propertyAddress' for Rental Income and Capital Gains.
+// Moving-expense rows the admin screen shows beyond addresses and totals: hotel stays, temporary living
+// and the new job. One helper for the individual and the spouse so they print the same fields.
+function movingExtraRows(m: Record<string, any>): [string, string][] {
+  const rows: [string, string][] = [];
+  if (m.travelHotelName || m.travelHotelNights || m.travelHotelCost) {
+    rows.push(['Travel Hotel Name', m.travelHotelName || 'N/A'], ['Travel Hotel Nights', String(m.travelHotelNights ?? 0)], ['Travel Hotel Cost', formatCurrency(m.travelHotelCost || 0)]);
+  }
+  if (m.tempLivingHotelName || m.tempLivingNights || m.tempLivingCost) {
+    rows.push(['Temporary Living Hotel', m.tempLivingHotelName || 'N/A'], ['Temporary Living Nights', String(m.tempLivingNights ?? 0)], ['Temporary Living Cost', formatCurrency(m.tempLivingCost || 0)]);
+  }
+  return rows;
+}
+function movingJobRows(m: Record<string, any>): [string, string][] {
+  const employer = formatStructuredAddress(m, 'employerAddress');
+  const any = m.dateJoinedCompany || m.companyName || employer || m.incomeEarnedAfterMove;
+  if (!any) return [];
+  return [
+    ['Date of Joining', formatDate(m.dateJoinedCompany) || 'N/A'],
+    ['Company Name', m.companyName || 'N/A'],
+    ['Employer Address', employer || 'N/A'],
+    ['Income Earned After Move', formatCurrency(m.incomeEarnedAfterMove || 0)],
+  ];
+}
+
 function formatStructuredAddress(data: Record<string, any>, prefix: string): string {
   const street = data[`${prefix}Street`];
   const city = data[`${prefix}City`];
@@ -238,6 +273,22 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
     return yPos + 5;
   };
 
+  // Lists a question's documents under it, the way the admin's Detailed Data tab does. Does nothing when the
+  // client has no document for that question.
+  const addSectionDocs = (sectionKey: string) => {
+    const docsForSection = getDocsForSection(sectionKey, documents);
+    if (docsForSection.length === 0) return;
+    checkNewPage(15 + docsForSection.length * 5);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Supporting Documents:', 16, yPosition);
+    yPosition += 5;
+    docsForSection.forEach((d) => {
+      yPosition = addDocumentLink(d, 20, yPosition);
+    });
+    yPosition += 5;
+  };
+
   // Helper to add section header
   const addSectionHeader = (title: string, applicable: boolean) => {
     checkNewPage(30);
@@ -288,6 +339,7 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
     ['SIN', pi?.sin || 'N/A'],
     ['Date of Birth', pi?.dateOfBirth || 'N/A'],
     ['Marital Status', pi?.maritalStatus || 'N/A'],
+    ['Canadian Citizen', pi?.isCanadianCitizen ? 'Yes' : 'No'],
     ['Email', pi?.email || client.email || 'N/A'],
     ['Phone', pi?.phone || client.phone || 'N/A'],
     ['Address', pi?.currentAddress ? formatAddress(pi.currentAddress) : 'N/A'],
@@ -314,9 +366,14 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
       ['Date of Birth', sp.dateOfBirth || 'N/A'],
       ['Email', sp.email || 'N/A'],
       ['Phone', sp.phoneNumber || 'N/A'],
-      ['Address', sp.street ? `${sp.street}, ${sp.city || ''}, ${sp.province || ''} ${sp.postalCode || ''}` : 'N/A'],
-      ['Date of Marriage/Separation', sp.dateOfMarriageOrSeparation || 'N/A'],
-      ...(sp.receivesSpousePayment ? [['Spousal Support Payment', formatCurrency(sp.supportPaymentAmount || 0)]] : []),
+      ['Canadian Citizen', sp.isCanadianCitizen ? 'Yes' : 'No'],
+      ['Address', sp.street ? formatAddress({ street: sp.street, aptSuite: sp.aptSuite, city: sp.city || '', province: sp.province || '', postalCode: sp.postalCode || '', country: sp.country }) : 'N/A'],
+      // Same label and same rule as the admin screen: named by the current marital status, hidden when it cannot apply.
+      ...(sp.dateOfMarriageOrSeparation && spouseDateLabel(pi?.maritalStatus) && spouseDateApplies(pi?.maritalStatus, sp.marriageInTaxYear)
+        ? [[spouseDateLabel(pi?.maritalStatus) as string, sp.dateOfMarriageOrSeparation]] : []),
+      ...(sp.marriageInTaxYear && ['married', 'common-law'].includes(String(pi?.maritalStatus || '').toLowerCase()) ? [['Married in Tax Year', 'Yes']] : []),
+      ...(sp.separationInTaxYear && ['separated', 'divorced', 'widowed'].includes(String(pi?.maritalStatus || '').toLowerCase()) ? [['Separated in Tax Year', 'Yes']] : []),
+      ...(sp.receivesSpousePayment ? [['Receives Spousal Support Payment', 'Yes'], ['Spousal Support Payment Amount', formatCurrency(sp.supportPaymentAmount || 0)]] : []),
     ];
     autoTable(doc, {
       startY: yPosition,
@@ -401,6 +458,7 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
 
   // Employment Income Section
   const hasEmployment = t1FormData?.employmentIncome && t1FormData.employmentIncome.length > 0;
+  addSectionDocs('AVAILABLE_DOCUMENTS');
   addSectionHeader('Q1: Employment Income (T-slip details)', hasEmployment);
   
   if (hasEmployment) {
@@ -621,6 +679,8 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
       ['Movers & Packers', formatCurrency(me.moversAndPackers || me.moversPackersCost || 0)],
       ['Meals & Other', formatCurrency(me.mealsAndOtherCost || me.travelMealsCost || 0)],
       ['Other Costs', formatCurrency(me.anyOtherCost || me.otherMovingCosts || 0)],
+      ...movingExtraRows(me),
+      ...movingJobRows(me),
       ['Total Moving Cost', formatCurrency(me.totalMovingCost || 0)],
     ];
 
@@ -664,6 +724,8 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
       ['Movers & Packers', formatCurrency(mes.moversPackersCost || 0)],
       ['Meals & Other', formatCurrency(mes.travelMealsCost || 0)],
       ['Other Costs', formatCurrency(mes.otherMovingCosts || 0)],
+      ...movingExtraRows(mes),
+      ...movingJobRows(mes),
       ['Total Moving Cost', formatCurrency(mes.totalMovingCost || 0)],
     ];
     autoTable(doc, {
@@ -683,17 +745,23 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
   if (hasSelfEmployment && t1FormData.selfEmployment) {
     const se = t1FormData.selfEmployment;
     
-    if (se.hasUberSkipDoorDash && se.uberIncome) {
+    const rideShareIncomes = getRideShareIncomes(t1FormData.uploadedDocuments as Record<string, unknown> | undefined);
+    if ((se.hasUberSkipDoorDash && se.uberIncome) || rideShareIncomes.length > 0) {
+      checkNewPage(40);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
       doc.text('Uber/Skip/DoorDash Income', 16, yPosition);
       yPosition += 5;
       
       const uberData = [
-        ['Gross Income', formatCurrency(se.uberIncome.income || se.uberIncome.grossIncome || 0)],
-        ['Total Expenses', formatCurrency(se.uberIncome.totalExpenses || 0)],
-        ['Net Income', formatCurrency(se.uberIncome.netIncome || 0)],
-        ...pdfRows(se.uberIncome, UBER_DETAIL_FIELDS),
+        // The app records income per service; the admin screen lists them under "Income by Service".
+        ...rideShareIncomes.map((r): [string, string] => [`${r.label} Income`, formatCurrency(r.amount)]),
+        ...(se.uberIncome ? [
+          ['Gross Income', formatCurrency(se.uberIncome.income || se.uberIncome.grossIncome || 0)],
+          ['Total Expenses', formatCurrency(se.uberIncome.totalExpenses || 0)],
+          ['Net Income', formatCurrency(se.uberIncome.netIncome || 0)],
+          ...pdfRows(se.uberIncome, UBER_DETAIL_FIELDS),
+        ] : []),
       ];
 
       autoTable(doc, {
@@ -866,6 +934,7 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
   }
 
   // Q7: First Home Purchase (no document is requested for it)
+  addSectionDocs('RENTAL_INCOME');
   addSectionHeader('Q7: First Home Purchase', !!t1FormData?.isFirstHomeBuyer);
   if (t1FormData?.isFirstHomeBuyer) {
     autoTable(doc, {
@@ -1139,10 +1208,12 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
   }
 
   // Q11: RRSP/FHSA
+  addSectionDocs('PROFESSIONAL_DUES');
   addSectionHeader('Q17: RRSP/FHSA Contributions', !!t1FormData?.hasRrspFhsaInvestment);
 
   // Q18: Children's Art & Sport Tax Credit
   const hasChildArt = Array.isArray(t1FormData?.childrenCredits) && t1FormData.childrenCredits.length > 0;
+  addSectionDocs('RRSP');
   addSectionHeader("Q18: Children's Art & Sport Tax Credit", hasChildArt);
   if (hasChildArt) {
     autoTable(doc, {
@@ -1158,17 +1229,20 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
 
   // Rent or Property Tax (Province Filer)
   const hasProvinceFiler = t1FormData?.provinceFilerEntries && t1FormData.provinceFilerEntries.length > 0;
+  addSectionDocs('CHILD_ART_SPORT');
   addSectionHeader('Q19: Rent or Property Tax (Ontario/Quebec)', hasProvinceFiler);
   if (hasProvinceFiler) {
     const pfRows = t1FormData.provinceFilerEntries.map((e: any) => [
       e.province || 'N/A',
       e.rentOrPropertyTax || 'N/A',
       e.propertyAddress || 'N/A',
+      e.postalCode || 'N/A',
+      (e.monthsResides ?? e.numberOfMonthsResides)?.toString() || 'N/A',
       formatCurrency(e.amountPaid ?? e.rentOrPropertyTaxAmount ?? 0),
     ]);
     autoTable(doc, {
       startY: yPosition,
-      head: [['Province', 'Rent/Property Tax', 'Address', 'Amount Paid']],
+      head: [['Province', 'Rent/Property Tax', 'Address', 'Postal Code', 'No. Of Months Resides', 'Amount Paid']],
       body: pfRows,
       theme: 'grid',
       headStyles: { fillColor: [100, 100, 100], fontSize: 8 },
@@ -1177,6 +1251,7 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
     yPosition = (doc as any).lastAutoTable?.finalY + 10 || yPosition + 25;
   }
 
+  addSectionDocs('RENT_PROPERTY_TAX');
   // Q12: Disability Tax Credit
   const hasDisability = t1FormData?.disabilityTaxCredit && t1FormData.disabilityTaxCredit.length > 0;
   addSectionHeader('Q20: Disability Tax Credit', hasDisability);
@@ -1199,6 +1274,7 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
   }
 
   // Deceased Return
+  addSectionDocs('DISABILITY');
   addSectionHeader('Q21: Filing for a Deceased Person', !!t1FormData?.deceasedReturn);
   if (t1FormData?.deceasedReturn) {
     const dr = t1FormData.deceasedReturn;
@@ -1207,10 +1283,10 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
       ['Name of Deceased', dr.deceasedFullName || 'N/A'],
       ['Date of Death', dr.dateOfDeath || 'N/A'],
       ['Deceased SIN', dr.deceasedSin || 'N/A'],
-      ['Mailing Address', dr.deceasedMailingAddress || 'N/A'],
+      ['Mailing Address', formatStructuredAddress(dr, 'deceasedMailingAddress') || 'N/A'],
       ['Legal Representative', dr.legalRepresentativeName || 'N/A'],
       ['Legal Rep. Contact', dr.legalRepresentativeContactNumber || 'N/A'],
-      ['Legal Rep. Address', dr.legalRepresentativeAddress || 'N/A'],
+      ['Legal Rep. Address', formatStructuredAddress(dr, 'legalRepresentativeAddress') || 'N/A'],
     ];
     autoTable(doc, {
       startY: yPosition,
@@ -1222,6 +1298,7 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
     yPosition = (doc as any).lastAutoTable?.finalY + 10 || yPosition + 25;
   }
 
+  addSectionDocs('DECEASED_RETURN');
   // ============ PAYMENT HISTORY ============
   if (payments.length > 0) {
     checkNewPage(60);
