@@ -794,6 +794,31 @@ export default function ClientDetail() {
     toast({ title: 'Document Deleted', description: 'The document has been removed.' });
   };
 
+  // The server changes more than the document when an admin asks for a document: it unlocks the
+  // submitted form and moves the filing to "Additional Information Required". Re-read both, otherwise
+  // this page keeps showing "Locked" and the old status until the admin reloads.
+  const refreshFilingState = async () => {
+    if (!id) return;
+    try {
+      const uid = resolvedUserId || id;
+      const [t1Resp, filingResp] = await Promise.all([
+        api.getUserT1FormData(uid, selectedFilingId || undefined).catch(() => null),
+        api.getFiling(id).catch(() => null),
+      ]);
+      const fresh = t1Resp?.t1_form;
+      if (fresh) {
+        setT1FormData((prev: any) => (prev
+          ? { ...prev, is_locked: fresh.is_locked, status: fresh.status, filing_status: filingResp?.status ?? fresh.filing_status ?? prev.filing_status }
+          : prev));
+      }
+      if (filingResp?.status) {
+        setClient((prev: any) => (prev ? { ...prev, status: filingResp.status } : prev));
+      }
+    } catch {
+      /* the next full page load will catch up */
+    }
+  };
+
   const handleRequestDocument = async (docName?: string, message?: string) => {
     try {
       await api.sendClientNotification({
@@ -817,6 +842,7 @@ export default function ClientDetail() {
         title: 'Request Sent',
         description: `A professional email was sent to ${client.email}${docName ? ` requesting "${docName}"` : ''}.`,
       });
+      await refreshFilingState();
     } catch {
       if (docName) {
         setRequestedDocNames((prev) => new Set(prev).add(docName));
@@ -850,6 +876,7 @@ export default function ClientDetail() {
         title: 'Re-Upload Requested',
         description: `${target?.name ? `"${target.name}"` : 'Document'} re-upload request sent to ${client.email}.`,
       });
+      await refreshFilingState();
     } catch {
       toast({ title: 'Re-Upload Requested', description: 'Client notified.' });
     }
@@ -863,7 +890,8 @@ export default function ClientDetail() {
       setT1FormData((prev) => prev ? { ...prev, is_locked: false, status: 'draft' } : prev);
       setIsUnlockOpen(false);
       setUnlockReason('');
-      toast({ title: 'Form Unlocked', description: 'The client can now edit and resubmit this T1 form.' });
+      toast({ title: 'Form Unlocked', description: 'The client can now edit and resubmit this T1 form, and has been notified.' });
+      await refreshFilingState();
     } catch (err) {
       toast({
         title: 'Unlock Failed',
