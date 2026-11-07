@@ -133,12 +133,12 @@ const GB_INFO_FIELDS: FieldSpec[] = [
 ];
 // Cost of Goods Sold, laid out like the expenses table: amount + HST columns.
 const GB_COGS_LINES: [label: string, key: string, hstKey: string | null][] = [
-  ['Opening Inventory', 'openingInventory', null],
+  ['Opening Inventory', 'openingInventory', 'openingInventoryHst'],
   ['Purchases During Year', 'purchasesDuringYear', 'purchasesDuringYearHst'],
   ['Subcontracts', 'subcontracts', 'subcontractsHst'],
-  ['Direct Wage Costs', 'directWageCosts', null],
+  ['Direct Wage Costs', 'directWageCosts', 'directWageCostsHst'],
   ['Other Costs', 'otherCosts', 'otherCostsHst'],
-  ['Purchase Returns', 'purchaseReturns', null],
+  ['Purchase Returns', 'purchaseReturns', 'purchaseReturnsHst'],
 ];
 const GB_OTHER_FIELDS: FieldSpec[] = [
   ['Other Expense 1', 'otherExpense1', 'c'], ['Other Expense 2', 'otherExpense2', 'c'], ['Other Expense 3', 'otherExpense3', 'c'],

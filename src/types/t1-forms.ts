@@ -192,14 +192,17 @@ export interface T1GeneralBusiness {
   minusHstCollected: number;
   grossIncome: number;
   openingInventory: number;
+  openingInventoryHst?: number;
   purchasesDuringYear: number;
   purchasesDuringYearHst?: number;
   subcontracts: number;
   subcontractsHst?: number;
   directWageCosts: number;
+  directWageCostsHst?: number;
   otherCosts: number;
   otherCostsHst?: number;
   purchaseReturns: number;
+  purchaseReturnsHst?: number;
   // Operating Expenses
   advertising: number;
   mealsEntertainment: number;

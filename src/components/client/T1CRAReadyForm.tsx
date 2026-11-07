@@ -737,14 +737,17 @@ export function T1CRAReadyForm({
                     <CopyableField label="Minus HST Collected" value={formatCurrency(formData.selfEmployment.generalBusiness.minusHstCollected)} />
                     <CopyableField label="Net Income" value={formatCurrency(formData.selfEmployment.generalBusiness.grossIncome)} className="font-medium" />
                     <CopyableField label="Opening Inventory" value={formatCurrency(formData.selfEmployment.generalBusiness.openingInventory)} />
+                    <CopyableField label="Opening Inventory HST" value={formatCurrency(formData.selfEmployment.generalBusiness.openingInventoryHst)} />
                     <CopyableField label="Purchases During Year" value={formatCurrency(formData.selfEmployment.generalBusiness.purchasesDuringYear)} />
                     <CopyableField label="Purchases During Year HST" value={formatCurrency(formData.selfEmployment.generalBusiness.purchasesDuringYearHst)} />
                     <CopyableField label="Subcontracts" value={formatCurrency(formData.selfEmployment.generalBusiness.subcontracts)} />
                     <CopyableField label="Subcontracts HST" value={formatCurrency(formData.selfEmployment.generalBusiness.subcontractsHst)} />
                     <CopyableField label="Direct Wage Costs" value={formatCurrency(formData.selfEmployment.generalBusiness.directWageCosts)} />
+                    <CopyableField label="Direct Wage Costs HST" value={formatCurrency(formData.selfEmployment.generalBusiness.directWageCostsHst)} />
                     <CopyableField label="Other Costs" value={formatCurrency(formData.selfEmployment.generalBusiness.otherCosts)} />
                     <CopyableField label="Other Costs HST" value={formatCurrency(formData.selfEmployment.generalBusiness.otherCostsHst)} />
                     <CopyableField label="Purchase Returns" value={formatCurrency(formData.selfEmployment.generalBusiness.purchaseReturns)} />
+                    <CopyableField label="Purchase Returns HST" value={formatCurrency(formData.selfEmployment.generalBusiness.purchaseReturnsHst)} />
                   </div>
                 </div>
 
@@ -889,7 +892,6 @@ export function T1CRAReadyForm({
                           </div>
                           <CopyableField label="Number of Units" value={rent.numberOfUnits?.toString() || 'N/A'} />
                           <CopyableField label="Personal Use Portion" value={rent.personalUsePortion || 'N/A'} />
-                          <CopyableField label="Gov't Income (Rental)" value={rent.anyGovtIncomeRelatingToRental || 'N/A'} />
                         </div>
                       </div>
 
@@ -939,6 +941,7 @@ export function T1CRAReadyForm({
                         <h6 className="font-medium text-sm text-muted-foreground mb-3">Income & Expenses</h6>
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                           <CopyableField label="Gross Rental Income" value={formatCurrency(rent.grossRentalIncome)} className="font-medium" />
+                          <CopyableField label="Gov't Income (Rental)" value={rent.anyGovtIncomeRelatingToRental ? formatCurrency(rent.anyGovtIncomeRelatingToRental) : 'N/A'} />
                           <CopyableField label="Property Taxes" value={formatCurrency(rent.propertyTaxes)} />
                           <CopyableField label="Insurance" value={formatCurrency(rent.insurance ?? rent.houseInsurance)} />
                           <CopyableField label="Mortgage Interest" value={formatCurrency(rent.mortgageInterest)} />

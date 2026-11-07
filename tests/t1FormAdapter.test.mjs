@@ -43,12 +43,14 @@ const d2 = conv({ answers: [
   a("selfEmployment.generalBusiness.purchasesDuringYear", "1000"), a("selfEmployment.generalBusiness.purchasesDuringYearHst", "130"),
   a("selfEmployment.generalBusiness.subcontractsHst", "26"), a("selfEmployment.generalBusiness.otherCostsHst", "13"),
   a("selfEmployment.generalBusiness.minusHstCollected", "200"),
+  a("selfEmployment.generalBusiness.openingInventoryHst", "11"), a("selfEmployment.generalBusiness.directWageCostsHst", "22"), a("selfEmployment.generalBusiness.purchaseReturnsHst", "33"),
   a("rentalIncome[0].propertyTaxes", "3000"), a("rentalIncome[0].houseInsurance", "900"),
   a("rentalIncome[0].ccaOtherDetails", "Fridge"), a("rentalIncome[0].ccaOtherAmount", "650"), a("rentalIncome[0].ccaOtherPurchaseDate", "2025-03-01"),
 ]});
 const gb = (d2.selfEmployment || {}).generalBusiness || {};
 eq("7.2 COGS HST fields reach admin", [gb.purchasesDuringYearHst, gb.subcontractsHst, gb.otherCostsHst], ["130", "26", "13"]);
 eq("7.2 minus HST collected", gb.minusHstCollected, "200");
+eq("7.2 HST next to opening inventory, direct wages, purchase returns", [gb.openingInventoryHst, gb.directWageCostsHst, gb.purchaseReturnsHst], ["11", "22", "33"]);
 const rent = (d2.selfEmployment || {}).rentalIncome || d2.rentalIncome || [];
 const r = rent[0] || {};
 eq("7.10 rental CCA (other) details/amount/date", [r.ccaOtherDetails, r.ccaOtherAmount, r.ccaOtherPurchaseDate], ["Fridge", "650", "2025-03-01"]);
