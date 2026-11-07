@@ -19,15 +19,17 @@ export const DOC_SECTION_KEYWORDS: Record<string, string[]> = {
   medical_expenses: ['medical', 'hospital', 'health', 'pharmacy', 'doctor', 'medicine', 'clinic'],
   charitable_donations: ['donation', 'charity', 'ngo', 'trust'],
   moving_expenses: ['moving', 'relocation', 'transport', 'air_ticket', 'air ticket', 'airfare', 'meals_receipt',
-    'hotel_stay', 'hotel stay', 'short_term', 'accommodation', 'vehicle_change', 'change_permit'],
-  uber_income: ['uber', 'skip', 'doordash', 'lyft'],
+    'hotel_stay', 'hotel stay', 'short_term', 'short term', 'accommodation', 'accomodation', 'meals', 'vehicle_change', 'change_permit'],
+  uber_income: ['uber', 'skip', 'doordash', 'lyft', 'u-ride', 'uride', 'car purchase', 'car_purchase'],
   self_employment: ['self-employment', 'freelance', 'consulting', 'invoice', 'business', 'gst'],
   // 'insurance' - a rental property's house-insurance statement belongs here.
-  rental_income: ['rent', 'rental', 'tenant', 'landlord', 'insurance'],
+  rental_income: ['rent', 'rental', 'tenant', 'landlord', 'insurance', 'mortgage', 'utility', 'repair',
+    'maintenance', 'cleaning', 'management', 'admin fee', 'advertising', 'promotion', 'legal and professional',
+    'residential property'],
   capital_gains: ['capital gain', 'stock', 'trading', 'property sale'],
   work_from_home: ['work from home', 't2200', 'home office'],
   tuition: ['tuition', 't2202', 'education', 'school', 'college', 'university'],
-  childcare: ['daycare', 'childcare', 'babysitter', 'child care'],
+  childcare: ['daycare', 'day care', 'childcare', 'babysitter', 'child care'],
   child_art_sport: ['child_art_sport', 'art_sport', 'art & sport', 'fitness'],
   union_dues: ['union', 'dues'],
   professional_dues: ['professional', 'license', 'certification', 'membership'],
@@ -35,7 +37,7 @@ export const DOC_SECTION_KEYWORDS: Record<string, string[]> = {
   first_time_filer: ['first time', 'landing'],
   rrsp_contributions: ['rrsp', 'fhsa'],
   rent_property_tax: ['property tax', 'rent receipt', 'rl31', 'rl-31', 'province_filer'],
-  deceased_return: ['deceased', 'submitter_id', 'death'],
+  deceased_return: ['deceased', 'submitter_id', 'death', 'clearance certificate'],
   t183_form: ['t183'],
 };
 
@@ -57,8 +59,51 @@ type DocLike = {
   documentType?: string | null;
 };
 
+// Upload slots the app defines itself. These are exact, so they beat keyword guessing and also a
+// wrong section computed by the server (e.g. it files "Legal and Professional Fees Receipt", a
+// Rental Income upload, under Professional Dues).
+const RENTAL_SLOT_LABELS = new Set([
+  'House Insurance Statement', 'Bank Mortgage Statement', 'Property Tax Bill', 'Utility Bill',
+  'Management / Admin Fees Receipt', 'Repair and Maintenance Receipt', 'Cleaning Expense Receipt',
+  'Legal and Professional Fees Receipt', 'Advertising and Promotion Receipt',
+].map((l) => l.toLowerCase().replace(/[^a-z0-9]/g, '')));
+
+// Documents-tab card labels whose section the server would otherwise decide differently.
+const UBER_SLOT_LABELS = new Set([
+  'Uber Income Statement', 'Skip Income Statement', 'Uber Eats Statement', 'Doordash Income Statement',
+  'U-Ride Income Statement', 'Lyft Income Statement',
+  'Car purchase Receipt (ONLY IF YOU PURCHASED A CAR)', 'Car purchase Receipt – Optional (if you purchased a new car)',
+].map((l) => l.toLowerCase().replace(/[^a-z0-9]/g, '')));
+
+const SLOT_PREFIX_SECTIONS: Array<[prefix: string, section: string]> = [
+  ['union_dues_', 'union_dues'],
+  ['professional_dues_', 'professional_dues'],
+  ['daycare_receipt_', 'childcare'],
+  ['rrsp_fhsa_', 'rrsp_contributions'],
+  ['child_art_sport_', 'child_art_sport'],
+  ['province_filer_', 'rent_property_tax'],
+  ['rl31_form_', 'rent_property_tax'],
+  ['cra_disability_approval_', 'disability_tax_credit'],
+  ['donation_receipt_', 'charitable_donations'],
+  ['uber_statement_', 'uber_income'],
+  ['uber_car_purchase_receipt', 'uber_income'],
+];
+
+function exactSlotSection(raw: unknown): string | null {
+  const text = String(raw ?? '').trim();
+  if (!text) return null;
+  const norm = text.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (RENTAL_SLOT_LABELS.has(norm)) return 'rental_income';
+  if (UBER_SLOT_LABELS.has(norm)) return 'uber_income';
+  const lower = text.toLowerCase();
+  for (const [prefix, section] of SLOT_PREFIX_SECTIONS) if (lower.startsWith(prefix)) return section;
+  return null;
+}
+
 /** Returns the section key for a document, or '__other__'. */
 export function classifyDocSection(doc: DocLike, knownSections?: Record<string, unknown>): string {
+  const slot = exactSlotSection(doc.document_type || doc.documentType || doc.name);
+  if (slot) return slot;
   const explicit = doc.sectionKey || '';
   if (explicit && (!knownSections || explicit in knownSections || explicit in DOC_SECTION_KEYWORDS)) {
     return explicit;
