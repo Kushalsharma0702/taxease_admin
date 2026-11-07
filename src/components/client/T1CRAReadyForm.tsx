@@ -103,6 +103,18 @@ const RIDE_SHARE_DOC_PATTERN = /uber|skip|doordash|lyft|u-ride|car_purchase|car 
 const isRideShareDoc = (d: DocFields) =>
   RIDE_SHARE_DOC_PATTERN.test(`${d.name || ''} ${d.type || ''} ${d.document_type ?? d.documentType ?? ''}`);
 
+
+// The app saves each ride-share/delivery service's income next to its statement upload, in the
+// "uploaded documents" map as uber_income_<service> (e.g. uber_income_uber_ride = "36658").
+const rideShareServiceLabel = (key: string) =>
+  key.split(/[_-]+/).filter(Boolean)
+    .map((w) => (w.toLowerCase() === 'doordash' ? 'DoorDash' : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ');
+const getRideShareIncomes = (uploaded: Record<string, unknown> | undefined | null) =>
+  Object.entries(uploaded || {})
+    .filter(([k, v]) => k.startsWith('uber_income_') && v !== '' && v !== null && v !== undefined && !isNaN(Number(v)))
+    .map(([k, v]) => ({ key: k, label: rideShareServiceLabel(k.slice('uber_income_'.length)), amount: Number(v) }));
+
 export function T1CRAReadyForm({ 
   clientId, 
   filingYear,
@@ -129,6 +141,12 @@ export function T1CRAReadyForm({
     console.log('Using mock data for client:', clientId);
     return getT1FormData(clientId);
   }, [t1FormData, clientId]);
+
+  const se = formData?.selfEmployment;
+  const rideShareIncomes = getRideShareIncomes(formData?.uploadedDocuments as Record<string, unknown> | undefined);
+  const hasUberSection = !!se && (!!se.uberIncome || !!se.hasUberSkipDoorDash || rideShareIncomes.length > 0 || documents.some(isRideShareDoc));
+  const hasGeneralBusinessSection = !!se && (!!se.generalBusiness || !!se.hasGeneralBusiness);
+  const hasRentalSection = !!se && (!!se.hasRentalIncome || (se.rentalIncome?.length ?? 0) > 0);
 
   if (!formData) {
     return (
@@ -614,27 +632,27 @@ export function T1CRAReadyForm({
         />
       </T1CRASection>
 
-      {/* Q6: Self-Employment */}
+      {/* Q6 is three sections, in the order the client fills them, each followed by its own documents. */}
+      {/* Q6a: Uber / Skip / DoorDash */}
       <T1CRASection
-        title="Q6: Self-Employment"
+        title="Q6a: Uber / Skip / DoorDash"
         icon={<Building2 className="h-5 w-5 text-primary" />}
-        applicable={!!formData.selfEmployment}
-        sectionData={formData.selfEmployment as unknown as Record<string, unknown>}
+        applicable={hasUberSection}
+        sectionData={{ ...(se?.uberIncome as unknown as Record<string, unknown>), incomeByService: Object.fromEntries(rideShareIncomes.map((r) => [r.label, r.amount])) }}
       >
-        {formData.selfEmployment && (
+        {hasUberSection && (
           <div className="space-y-6">
-            <div className="flex flex-wrap gap-3">
-              <Badge variant={formData.selfEmployment.hasUberSkipDoorDash ? 'default' : 'outline'}>
-                {formData.selfEmployment.hasUberSkipDoorDash ? '✓' : '✗'} Uber/Skip/DoorDash
-              </Badge>
-              <Badge variant={formData.selfEmployment.hasGeneralBusiness ? 'default' : 'outline'}>
-                {formData.selfEmployment.hasGeneralBusiness ? '✓' : '✗'} General Business
-              </Badge>
-              <Badge variant={formData.selfEmployment.hasRentalIncome ? 'default' : 'outline'}>
-                {formData.selfEmployment.hasRentalIncome ? '✓' : '✗'} Rental Income
-              </Badge>
-            </div>
-            
+            {rideShareIncomes.length > 0 && (
+              <div>
+                <h5 className="font-medium text-sm text-muted-foreground mb-3">Income by Service</h5>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {rideShareIncomes.map((r) => (
+                    <CopyableField key={r.key} label={`${r.label} Income`} value={formatCurrency(r.amount)} className="font-medium" />
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Uber/Skip/DoorDash Income - Full Detail */}
             {formData.selfEmployment.uberIncome && (
               <>
@@ -697,20 +715,31 @@ export function T1CRAReadyForm({
             )}
 
             {/* Uber/Skip/DoorDash Documents - shown directly under their own sub-section. */}
-            {formData.selfEmployment.uberIncome && (
-              <QuestionDocuments
-                sectionKey="SELF_EMPLOYMENT"
-                sectionTitle="Uber/Skip/DoorDash Documents"
-                documents={documents}
-                docFilter={isRideShareDoc}
-                onApprove={onApproveDoc}
-                onRequestReupload={onRequestReupload}
-                onRequestMissing={onRequestMissing}
-                onView={onViewDoc}
-                canEdit={canEdit}
-              />
-            )}
+            <QuestionDocuments
+              sectionKey="SELF_EMPLOYMENT"
+              sectionTitle="Uber/Skip/DoorDash Documents"
+              documents={documents}
+              docFilter={isRideShareDoc}
+              onApprove={onApproveDoc}
+              onRequestReupload={onRequestReupload}
+              onRequestMissing={onRequestMissing}
+              onView={onViewDoc}
+              canEdit={canEdit}
+            />
 
+          </div>
+        )}
+      </T1CRASection>
+
+      {/* Q6b: General Business */}
+      <T1CRASection
+        title="Q6b: General Business"
+        icon={<Building2 className="h-5 w-5 text-primary" />}
+        applicable={hasGeneralBusinessSection}
+        sectionData={se?.generalBusiness as unknown as Record<string, unknown>}
+      >
+        {hasGeneralBusinessSection && (
+          <div className="space-y-6">
             {/* General Business Income - Full Detail (60+ fields) */}
             {formData.selfEmployment.generalBusiness && (
               <>
@@ -872,6 +901,19 @@ export function T1CRAReadyForm({
               />
             )}
 
+          </div>
+        )}
+      </T1CRASection>
+
+      {/* Q6c: Rental Income */}
+      <T1CRASection
+        title="Q6c: Rental Income"
+        icon={<Building2 className="h-5 w-5 text-primary" />}
+        applicable={hasRentalSection}
+        sectionData={{ rentalIncome: se?.rentalIncome } as unknown as Record<string, unknown>}
+      >
+        {hasRentalSection && (
+          <div className="space-y-6">
             {/* Rental Income - Extended with Co-owners */}
             {formData.selfEmployment.rentalIncome && formData.selfEmployment.rentalIncome.length > 0 && (
               <>
