@@ -319,9 +319,24 @@ export function T1CRAReadyForm({
             {formData.personalInfo.spouseInfo.postalCode && (
               <CopyableField label="Postal Code" value={formData.personalInfo.spouseInfo.postalCode} />
             )}
-            {formData.personalInfo.spouseInfo.dateOfMarriageOrSeparation && (
-              <CopyableField label="Date of Marriage / Separation" value={formatDate(formData.personalInfo.spouseInfo.dateOfMarriageOrSeparation)} />
-            )}
+            {/* One stored date serves several meanings. Label it by the CURRENT marital status
+                and hide it when it can't apply (e.g. "married" but not married this year). */}
+            {(() => {
+              const status = String(formData.personalInfo.maritalStatus || '').toLowerCase();
+              const date = formData.personalInfo.spouseInfo.dateOfMarriageOrSeparation;
+              const labels: Record<string, string> = {
+                married: 'Date of Marriage',
+                'common-law': 'Date of Common-Law',
+                separated: 'Date of Separation',
+                divorced: 'Date of Divorce',
+                widowed: 'Date of Death',
+              };
+              const label = labels[status];
+              if (!date || !label) return null;
+              const marriedGroup = status === 'married' || status === 'common-law';
+              if (marriedGroup && !formData.personalInfo.spouseInfo.marriageInTaxYear) return null;
+              return <CopyableField label={label} value={formatDate(date)} />;
+            })()}
             {/* Only show the answer that matches the CURRENT marital status: a
                 client who briefly picked "Separated" and switched back to
                 "Married" can still have a stale separation answer stored. */}
