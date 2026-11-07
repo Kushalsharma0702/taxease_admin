@@ -936,10 +936,11 @@ export function T1CRAReadyForm({
                               const sin = docs[`rental_coowner${n}_sin`];
                               const dob = docs[`rental_coowner${n}_dob`];
                               const street = docs[`rental_coowner${n}_street`];
+                              const apt = docs[`rental_coowner${n}_apt`];
                               const city = docs[`rental_coowner${n}_city`];
                               const province = docs[`rental_coowner${n}_province`];
                               const postal = docs[`rental_coowner${n}_postal`];
-                              const hasExtra = sin || dob || street || city || province || postal;
+                              const hasExtra = sin || dob || street || apt || city || province || postal;
                               return (
                                 <div key={n}>
                                   <div className="grid gap-3 sm:grid-cols-3">
@@ -947,9 +948,10 @@ export function T1CRAReadyForm({
                                     {sin && <CopyableField label="SIN" value={sin} />}
                                     {dob && <CopyableField label="Date of Birth" value={formatDate(dob)} />}
                                   </div>
-                                  {hasExtra && (street || city || province || postal) && (
+                                  {hasExtra && (street || apt || city || province || postal) && (
                                     <div className="grid gap-3 sm:grid-cols-3 mt-3">
                                       {street && <CopyableField label="Street Address" value={street} />}
+                                      {apt && <CopyableField label="Apt / Suite / Unit" value={apt} />}
                                       {city && <CopyableField label="City" value={city} />}
                                       {province && <CopyableField label="Province" value={province} />}
                                       {postal && <CopyableField label="Postal Code" value={postal} />}

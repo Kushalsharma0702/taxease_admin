@@ -23,6 +23,10 @@ const t1FormData: any = { id: 'f1', answers: [
   a('movingExpenseIndividual.newEmployerAddressCity', 'Calgary'), a('movingExpenseIndividual.grossIncomeAfterMoving', 52000),
   a('isSelfEmployed', true), a('selfEmployment.hasUberSkipDoorDash', true),
   a('uploadedDocuments.uber_income_uber_ride', '36658'), a('uploadedDocuments.uber_income_doordash', '556'), a('uploadedDocuments.uber_income_lyft', '585'),
+  a('selfEmployment.hasRentalIncome', true), a('selfEmployment.rentalIncome.propertyAddress', '12 York St, Toronto'),
+  a('selfEmployment.rentalIncome.coOwnerPartner1', 'Pat Coowner'),
+  a('uploadedDocuments.rental_coowner1_street', '88 Maple Rd'), a('uploadedDocuments.rental_coowner1_apt', 'Unit 12B'),
+  a('uploadedDocuments.rental_coowner1_city', 'Ajax'),
   a('isProvinceFiler', true), a('provinceFilerEntries[0].province', 'ON'), a('provinceFilerEntries[0].postalCode', 'M5J 0A9'),
   a('provinceFilerEntries[0].monthsResides', 11), a('provinceFilerEntries[0].propertyAddress', '12 York St'),
   a('isFilingForDeceased', true), a('deceasedReturnInfo.deceasedFullName', 'Late Person'),
@@ -61,6 +65,7 @@ has('moving: income earned after move', 'Income Earned After Move');
 has('uber: Uber Ride income by service', 'Uber Ride Income');
 has('uber: DoorDash income by service', 'DoorDash Income');
 has('uber: Lyft income amount', '585');
+has('rental: co-owner address includes the apt / suite / unit', 'Unit 12B');
 has('Q19: postal code', 'M5J 0A9');
 has('Q19: months resides column', 'No. Of Months Resides');
 has('deceased: structured mailing address', '7 Elm St, Ajax');

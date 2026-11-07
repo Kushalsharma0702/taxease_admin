@@ -903,7 +903,7 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
             name,
             docs[`rental_coowner${n}_sin`] || 'N/A',
             docs[`rental_coowner${n}_dob`] || 'N/A',
-            [docs[`rental_coowner${n}_street`], docs[`rental_coowner${n}_city`], docs[`rental_coowner${n}_province`], docs[`rental_coowner${n}_postal`]]
+            [docs[`rental_coowner${n}_street`], docs[`rental_coowner${n}_apt`], docs[`rental_coowner${n}_city`], docs[`rental_coowner${n}_province`], docs[`rental_coowner${n}_postal`]]
               .filter(Boolean).join(', ') || 'N/A',
           ]);
           autoTable(doc, {
