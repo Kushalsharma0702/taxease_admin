@@ -54,11 +54,17 @@ export default function Clients() {
   // Staff a return can be assigned to, and which row is mid-save (that row's dropdown is disabled).
   const [assignableAdmins, setAssignableAdmins] = useState<Array<{ id: string; name: string }>>([]);
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  // Tax year used when a client is added from here (Settings > Tax Year Settings).
+  const [defaultFilingYear, setDefaultFilingYear] = useState<number | null>(null);
   const [newClient, setNewClient] = useState({ name: '', email: '', phone: '' });
   const [editClient, setEditClient] = useState({ name: '', email: '', phone: '' });
   // The real backend count (response.total), independent of how many rows
   // actually fit in the fetched page — see fetchClients below.
   const [totalCount, setTotalCount] = useState(0);
+
+  useEffect(() => {
+    api.getDefaultFilingYear().then((r) => setDefaultFilingYear(r.year)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!hasPermission(PERMISSIONS.ASSIGN_CLIENTS)) return;
@@ -314,7 +320,9 @@ export default function Clients() {
     }
     setIsLoading(true);
     try {
-      const filingYear = yearFilter !== 'all' ? parseInt(yearFilter) : new Date().getFullYear();
+      // The year filter if one is chosen, else the default filing year from Settings. The fallback is last
+      // year (the tax year being filed), not the current calendar year.
+      const filingYear = yearFilter !== 'all' ? parseInt(yearFilter) : (defaultFilingYear ?? new Date().getFullYear() - 1);
       await api.createClient({
         name: newClient.name.trim(),
         email: newClient.email.trim(),

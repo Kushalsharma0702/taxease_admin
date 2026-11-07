@@ -330,6 +330,15 @@ class ApiService {
     return this.request<Array<{ id: string; name: string; role: string }>>('/admin-users/assignable');
   }
 
+  // Default tax year for returns an admin creates by hand (stored on the server, see /settings).
+  async getDefaultFilingYear(): Promise<{ year: number; source: 'saved' | 'default'; options: number[] }> {
+    return this.request('/settings/default-filing-year');
+  }
+
+  async setDefaultFilingYear(year: number): Promise<{ year: number; source: 'saved' | 'default'; options: number[] }> {
+    return this.request('/settings/default-filing-year', { method: 'PUT', body: JSON.stringify({ year }) });
+  }
+
   async getAdminUser(id: string) {
     return this.request<any>(`/admin-users/${id}`);
   }

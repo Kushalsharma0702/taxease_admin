@@ -255,9 +255,10 @@ export const PIPELINE_STATUS_LABELS: Record<FilingPipelineStatus, string> = {
 export const FILED_STATUS_HELP = 'Use when the return has been transmitted to the CRA but confirmation is still pending.';
 export const COMPLETED_STATUS_HELP = 'Final step. The client is emailed and notified in the app with the thank-you and review request.';
 
-// Statuses an admin may set by hand. Excludes the two the system owns:
-// 'draft' (the client hasn't submitted yet) and 'approved_by_client' (only
-// the client's own approval in the app can produce it).
+// Statuses an admin may set by hand. Excludes 'draft' (the client hasn't submitted yet).
+// 'approved_by_client' ("Approval Received") is listed too: the client's own approval in the app sets it
+// automatically, and an admin can also record it (e.g. after a phone call) and then move the return on
+// to E-Filing Completed by hand.
 export const ADMIN_SETTABLE_STATUSES: FilingPipelineStatus[] = [
   'documents_pending',
   'submitted',
@@ -266,6 +267,7 @@ export const ADMIN_SETTABLE_STATUSES: FilingPipelineStatus[] = [
   'in_preparation',
   'awaiting_approval',
   'changes_requested',
+  'approved_by_client',
   'completed',
   'cancelled',
 ];

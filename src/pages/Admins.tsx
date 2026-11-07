@@ -31,6 +31,7 @@ import { User, PERMISSIONS } from '@/types';
 import { UserPlus, Edit, Shield, Users, Trash2, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiService } from '@/services/api';
+import { describeApiError } from '@/lib/apiError';
 
 const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSIONS.ADD_EDIT_PAYMENT]: 'Add/Edit Payments',
@@ -175,10 +176,18 @@ export default function Admins() {
   ];
 
   const handleAddAdmin = async () => {
-    if (!newAdmin.name || !newAdmin.email) {
+    if (!newAdmin.name.trim() || !newAdmin.email.trim()) {
       toast({
         title: 'Validation Error',
         description: 'Please fill in all required fields.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newAdmin.email.trim())) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please enter a valid email address, e.g. name@example.com.',
         variant: 'destructive',
       });
       return;
@@ -198,9 +207,9 @@ export default function Admins() {
 
     setIsLoading(true);
     try {
-      await apiService.createAdminUser({
-        name: newAdmin.name,
-        email: newAdmin.email,
+      const created = await apiService.createAdminUser({
+        name: newAdmin.name.trim(),
+        email: newAdmin.email.trim(),
         password: newAdmin.password,
         role: 'admin',
         permissions: newAdmin.permissions,
@@ -209,12 +218,14 @@ export default function Admins() {
       setIsAddOpen(false);
       toast({
         title: 'Admin Created',
-        description: `${newAdmin.name} has been added as an admin. Share the password with them directly — it is not emailed automatically.`,
+        description: created?.welcome_email_sent
+          ? `${newAdmin.name} has been added as an admin. A welcome email with the sign-in link was sent to ${newAdmin.email.trim()}. Share the password with them directly - it is never emailed.`
+          : `${newAdmin.name} has been added as an admin, but the welcome email could not be sent. Tell them to sign in at the dashboard with this email, and share the password directly.`,
       });
       fetchAdmins(); // Refresh
     } catch (error) {
       console.error('Failed to create admin:', error);
-      toast({ title: 'Error', description: 'Failed to create admin.', variant: 'destructive' });
+      toast({ title: 'Could not create admin', description: describeApiError(error, 'Failed to create admin.'), variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }

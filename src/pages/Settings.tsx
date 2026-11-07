@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { User, Building, Bell, DollarSign, Save } from 'lucide-react';
+import { api } from '@/services/api';
+import { describeApiError } from '@/lib/apiError';
 
 export default function Settings() {
   const { user, isSuperAdmin } = useAuth();
@@ -49,10 +51,38 @@ export default function Settings() {
     gstRate: '13',
   });
 
+  // Default filing year: the one setting here that is stored on the server and used (Add Client).
+  const [filingYear, setFilingYear] = useState<string>('');
+  const [yearOptions, setYearOptions] = useState<number[]>([]);
+  const [yearSaved, setYearSaved] = useState<number | null>(null);
+  const [isSavingYear, setIsSavingYear] = useState(false);
+
+  useEffect(() => {
+    api.getDefaultFilingYear()
+      .then((r) => { setFilingYear(String(r.year)); setYearSaved(r.year); setYearOptions(r.options); })
+      .catch(() => {});
+  }, []);
+
+  const handleSaveYear = async () => {
+    setIsSavingYear(true);
+    try {
+      const r = await api.setDefaultFilingYear(parseInt(filingYear));
+      setYearSaved(r.year);
+      setYearOptions(r.options);
+      toast({ title: 'Default Filing Year Saved', description: `New clients added from the dashboard will use ${r.year}.` });
+    } catch (err) {
+      toast({ title: 'Could not save', description: describeApiError(err, 'Failed to save the default filing year.'), variant: 'destructive' });
+    } finally {
+      setIsSavingYear(false);
+    }
+  };
+
+  // The other sections on this page are a preview: nothing is stored yet, so say so instead of
+  // claiming "Settings Saved".
   const handleSave = (section: string) => {
     toast({
-      title: 'Settings Saved',
-      description: `${section} settings have been updated successfully.`,
+      title: 'Not saved yet',
+      description: `${section} settings are a preview. Changes here are not stored yet.`,
     });
   };
 
@@ -223,17 +253,27 @@ export default function Settings() {
               <CardContent className="space-y-4">
                 <div className="space-y-2 max-w-xs">
                   <Label>Default Filing Year</Label>
-                  <Select defaultValue="2024">
+                  <Select value={filingYear} onValueChange={setFilingYear} disabled={!isSuperAdmin || !yearOptions.length}>
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Loading..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="2024">2024</SelectItem>
-                      <SelectItem value="2023">2023</SelectItem>
-                      <SelectItem value="2022">2022</SelectItem>
+                      {yearOptions.map((y) => (
+                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Used when you add a client from the dashboard. Clients who file through the app are not affected.
+                    {!isSuperAdmin && ' Only a superadmin can change this.'}
+                  </p>
                 </div>
+                {isSuperAdmin && (
+                  <Button onClick={handleSaveYear} disabled={isSavingYear || !filingYear || parseInt(filingYear) === yearSaved}>
+                    <Save className="h-4 w-4 mr-2" />
+                    {isSavingYear ? 'Saving...' : 'Save'}
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
