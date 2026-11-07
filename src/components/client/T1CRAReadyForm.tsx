@@ -613,7 +613,10 @@ export function T1CRAReadyForm({
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <CopyableField label="Date of Joining" value={formatDate(entry.data.dateJoinedCompany)} />
                 <CopyableField label="Company Name" value={entry.data.companyName} />
-                <CopyableField label="Employer Address" value={entry.data.employerAddress} />
+                <div className="sm:col-span-3">
+                  <CopyableField label="Employer Address" value={entry.data.employerAddress} />
+                  <div className="mt-2"><AddressBreakdown data={entry.data} prefix="employerAddress" /></div>
+                </div>
                 <CopyableField label="Income Earned After Move" value={formatCurrency(entry.data.incomeEarnedAfterMove)} />
               </div>
             </div>
@@ -1527,11 +1530,13 @@ export function T1CRAReadyForm({
             <CopyableField label="Deceased Person SIN" value={formData.deceasedReturn.deceasedSin} />
             <div className="sm:col-span-3">
               <CopyableField label="Mailing Address of Deceased" value={formData.deceasedReturn.deceasedMailingAddress} />
+              <div className="mt-2"><AddressBreakdown data={formData.deceasedReturn} prefix="deceasedMailingAddress" /></div>
             </div>
             <CopyableField label="Legal Representative Name" value={formData.deceasedReturn.legalRepresentativeName} />
             <CopyableField label="Legal Rep. Contact Number" value={formData.deceasedReturn.legalRepresentativeContactNumber} />
             <div className="sm:col-span-3">
               <CopyableField label="Legal Rep. Address" value={formData.deceasedReturn.legalRepresentativeAddress} />
+              <div className="mt-2"><AddressBreakdown data={formData.deceasedReturn} prefix="legalRepresentativeAddress" /></div>
             </div>
           </div>
         )}

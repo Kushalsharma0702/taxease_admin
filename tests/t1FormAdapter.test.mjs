@@ -16,7 +16,13 @@ const data = conv({ answers: [
   a("movingExpenseIndividual.oldAddressProvince", "NS"),
   a("movingExpenseIndividual.newAddressStreet", "9 New Ave"), a("movingExpenseIndividual.newAddressCity", "Calgary"),
   a("movingExpenseIndividual.newAddressProvince", "AB"), a("movingExpenseIndividual.newAddressPostalCode", "T2P 1A1"),
+  a("movingExpenseIndividual.newEmployerAddress", "5 Work Rd, Calgary"),
+  a("movingExpenseIndividual.newEmployerAddressStreet", "5 Work Rd"), a("movingExpenseIndividual.newEmployerAddressCity", "Calgary"),
+  a("movingExpenseIndividual.newEmployerAddressProvince", "AB"), a("movingExpenseIndividual.newEmployerAddressPostalCode", "T2P 2B2"),
   a("movingExpenseIndividual.airTicketCost", "420"),
+  a("isFilingForDeceased", true), a("deceasedReturnInfo.deceasedMailingAddress", "7 Elm St, Ajax"),
+  a("deceasedReturnInfo.deceasedMailingAddressStreet", "7 Elm St"), a("deceasedReturnInfo.deceasedMailingAddressCity", "Ajax"),
+  a("deceasedReturnInfo.legalRepresentativeAddressCity", "Oshawa"),
   a("movingExpenseForSpouse", true), a("movingExpenseSpouse.newAddressCity", "Calgary"), a("movingExpenseSpouse.airTicketCost", "300"),
   a("hasWorkFromHomeExpense", true), a("workFromHome.rentExpense", "1000"), a("workFromHome.mortgageExpense", "750"),
   a("personalInfo.firstName", "Sam"),
@@ -28,6 +34,8 @@ eq("7.7 moving old street reaches admin", m.oldAddressStreet, "1 Old St");
 eq("7.7 moving old city/province", [m.oldAddressCity, m.oldAddressProvince], ["Halifax", "NS"]);
 eq("7.7 moving new street/city/prov/postal", [m.newAddressStreet, m.newAddressCity, m.newAddressProvince, m.newAddressPostalCode], ["9 New Ave", "Calgary", "AB", "T2P 1A1"]);
 eq("7.7 legacy one-line address still present", m.oldAddress, "1 Old St, Halifax");
+eq("7.7 moving employer address breakdown reaches admin", [m.employerAddress, m.employerAddressStreet, m.employerAddressCity, m.employerAddressProvince, m.employerAddressPostalCode], ["5 Work Rd, Calgary", "5 Work Rd", "Calgary", "AB", "T2P 2B2"]);
+eq("7.7 deceased + legal rep address breakdown reaches admin", [data.deceasedReturn?.deceasedMailingAddressStreet, data.deceasedReturn?.deceasedMailingAddressCity, data.deceasedReturn?.legalRepresentativeAddressCity], ["7 Elm St", "Ajax", "Oshawa"]);
 eq("7.7 spouse structured address reaches admin", ms.newAddressCity, "Calgary");
 eq("7.7 empty parts are not invented", "oldAddressAptSuite" in m, false);
 eq("7.21 air ticket cost carried", [m.airTicketsCost, ms.airTicketsCost], [420, 300]);

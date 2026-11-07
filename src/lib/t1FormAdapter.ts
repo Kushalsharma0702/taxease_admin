@@ -28,6 +28,11 @@ function pickMovingAddressParts(src: any): Record<string, string> {
       if (src?.[key] !== undefined && src?.[key] !== null && src?.[key] !== '') out[key] = String(src[key]);
     }
   }
+  // The app calls the new employer's address newEmployerAddress*; the admin screen uses employerAddress*.
+  for (const part of MOVING_ADDRESS_PARTS) {
+    const v = src?.[`newEmployerAddress${part}`];
+    if (v !== undefined && v !== null && v !== '') out[`employerAddress${part}`] = String(v);
+  }
   return out;
 }
 
