@@ -1,4 +1,4 @@
-import { classifyDocSection, unavailableDocsForSection, prettifyDocKey } from '@/lib/documentSections';
+import { classifyDocSection, unavailableDocsForSection, withoutUploadedSlots, prettifyDocKey } from '@/lib/documentSections';
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -1651,7 +1651,7 @@ export default function ClientDetail() {
 
               const unavailableBySection = new Map<string, string[]>();
               for (const sk of SECTION_ORDER) {
-                const keys = unavailableDocsForSection(unavailableDocs, sk);
+                const keys = withoutUploadedSlots(unavailableDocsForSection(unavailableDocs, sk), grouped.get(sk) || []);
                 if (keys.length) unavailableBySection.set(sk, keys);
               }
 

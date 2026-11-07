@@ -25,7 +25,7 @@ import {
 import { Document as DocType, DocumentStatus } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { DOCUMENT_SECTION_KEYS, CATEGORY_TO_SECTION_KEY, DocumentSectionKey } from '@/lib/api/config';
-import { classifyDocSection, unavailableDocsForSection, prettifyDocKey } from '@/lib/documentSections';
+import { classifyDocSection, unavailableDocsForSection, withoutUploadedSlots, prettifyDocKey } from '@/lib/documentSections';
 
 // Names of missing documents already requested from the client. Provided once
 // by ClientDetail so every section can show a "Requested" badge without prop
@@ -144,8 +144,11 @@ export function QuestionDocuments({
         ? unavailableDocsForSection(unavailableMap, 'uber_income')
         : []),
     ];
-    return keys.filter((k) => !docFilter || docFilter({ name: k, type: k } as DocType));
-  }, [unavailableMap, sectionKeyValue, docFilter]);
+    return withoutUploadedSlots(
+      keys.filter((k) => !docFilter || docFilter({ name: k, type: k } as DocType)),
+      sectionDocs,
+    );
+  }, [unavailableMap, sectionKeyValue, docFilter, sectionDocs]);
 
   // Newest upload first, per document-type slot, so a replaced file's older
   // version renders below the current one instead of in upload order.

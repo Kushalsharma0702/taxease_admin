@@ -105,3 +105,18 @@ export function prettifyDocKey(key: string): string {
     .join(' ');
   return m ? `${base} ${Number(m[2]) + 1}` : base;
 }
+
+const slotId = (v: unknown) => String(v ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * Drops "not available" keys that already have an uploaded file for the same slot.
+ * A file the client actually uploaded beats a leftover unavailable flag (the app applies
+ * the same rule on its Documents tab), so one document is never shown as both.
+ */
+export function withoutUploadedSlots(keys: string[], docs: DocLike[]): string[] {
+  const uploaded = new Set<string>();
+  for (const d of docs) {
+    for (const v of [d.document_type, d.documentType]) if (v) uploaded.add(slotId(v));
+  }
+  return keys.filter((k) => !uploaded.has(slotId(k)));
+}
