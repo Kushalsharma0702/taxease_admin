@@ -324,6 +324,12 @@ class ApiService {
     return Array.isArray(result) ? result : (result as any).admins || [];
   }
 
+  // Active staff a return can be assigned to (id, name, role). Open to anyone allowed to assign,
+  // unlike getAdminUsers above, which is superadmin-only.
+  async getAssignableAdmins(): Promise<Array<{ id: string; name: string; role: string }>> {
+    return this.request<Array<{ id: string; name: string; role: string }>>('/admin-users/assignable');
+  }
+
   async getAdminUser(id: string) {
     return this.request<any>(`/admin-users/${id}`);
   }

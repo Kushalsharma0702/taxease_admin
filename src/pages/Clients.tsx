@@ -32,7 +32,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
-import { Client, STATUS_LABELS, ClientStatus } from '@/types';
+import { Client, STATUS_LABELS, ClientStatus, PERMISSIONS } from '@/types';
 import { Plus, Download, Trash2, Edit, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -51,11 +51,43 @@ export default function Clients() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
+  // Staff a return can be assigned to, and which row is mid-save (that row's dropdown is disabled).
+  const [assignableAdmins, setAssignableAdmins] = useState<Array<{ id: string; name: string }>>([]);
+  const [assigningId, setAssigningId] = useState<string | null>(null);
   const [newClient, setNewClient] = useState({ name: '', email: '', phone: '' });
   const [editClient, setEditClient] = useState({ name: '', email: '', phone: '' });
   // The real backend count (response.total), independent of how many rows
   // actually fit in the fetched page — see fetchClients below.
   const [totalCount, setTotalCount] = useState(0);
+
+  useEffect(() => {
+    if (!hasPermission(PERMISSIONS.ASSIGN_CLIENTS)) return;
+    api.getAssignableAdmins()
+      .then((admins) => setAssignableAdmins((admins || []).map((a: any) => ({ id: a.id, name: a.name }))))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Assign a return straight from the list. Same call as the Overview tab (PATCH /clients/{id}).
+  // Internal only: the client is not notified.
+  const handleAssignRow = async (client: Client, adminId: string) => {
+    setAssigningId(client.id);
+    try {
+      await api.updateClient(client.id, { assigned_admin_id: adminId || null });
+      const admin = assignableAdmins.find((a) => a.id === adminId);
+      setClients((prev) => prev.map((c) => (c.id === client.id
+        ? { ...c, assignedAdminId: adminId || null, assignedAdminName: admin?.name || null }
+        : c)));
+      toast({
+        title: adminId ? 'Assignee Updated' : 'Assignee Removed',
+        description: adminId ? `${client.name} is now assigned to ${admin?.name || 'the selected admin'}.` : `${client.name} is now unassigned.`,
+      });
+    } catch (err: any) {
+      toast({ title: 'Could not update assignee', description: err?.message || 'Please try again.', variant: 'destructive' });
+    } finally {
+      setAssigningId(null);
+    }
+  };
 
   // Fetch filings from backend (/filings endpoint, mapped as "clients")
   const fetchClients = useCallback(async () => {
@@ -175,7 +207,30 @@ export default function Clients() {
       key: 'assignedAdminName',
       header: 'Assignee',
       sortable: true,
-      render: (client: Client) => (
+      render: (client: Client) => hasPermission(PERMISSIONS.ASSIGN_CLIENTS) ? (
+        // stopPropagation: choosing an assignee must not open the client page (the row is clickable).
+        <div onClick={(e) => e.stopPropagation()}>
+          <Select
+            value={client.assignedAdminId || 'unassigned'}
+            onValueChange={(v) => handleAssignRow(client, v === 'unassigned' ? '' : v)}
+            disabled={assigningId === client.id}
+          >
+            <SelectTrigger className="h-8 w-[170px]" aria-label={`Assign ${client.name}`}>
+              <SelectValue placeholder="Unassigned" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              {assignableAdmins.map((a) => (
+                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+              ))}
+              {/* An assignee who is no longer in the list still shows by name instead of a blank box. */}
+              {client.assignedAdminId && !assignableAdmins.some((a) => a.id === client.assignedAdminId) && (
+                <SelectItem value={client.assignedAdminId}>{client.assignedAdminName || 'Assigned admin'}</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : (
         <span className={client.assignedAdminName ? '' : 'text-muted-foreground'}>
           {client.assignedAdminName || 'Unassigned'}
         </span>

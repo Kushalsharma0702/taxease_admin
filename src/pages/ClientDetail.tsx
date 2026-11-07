@@ -305,7 +305,7 @@ export default function ClientDetail() {
         // Independent of the main Promise.all above — a failure here
         // shouldn't block the rest of the page from loading.
         fetchPaymentRequests();
-        api.getAdminUsers()
+        api.getAssignableAdmins()
           .then((admins) => setAssignableAdmins((admins || []).map((a: any) => ({ id: a.id, name: a.name }))))
           .catch(() => {});
 
