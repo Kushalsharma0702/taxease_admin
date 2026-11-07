@@ -43,8 +43,10 @@ export const DOC_SECTION_KEYWORDS: Record<string, string[]> = {
 // uploads that belong to Q19; check these more specific sections first.
 const PRIORITY_SECTIONS = ['rent_property_tax', 'child_art_sport', 'uber_income'];
 
+// Compared with every non-alphanumeric character removed, so the app's upload
+// categories ("T4A_P", "T4A_OAS") and the on-screen labels ("T4A(P)") both match.
 const T_SLIP_LABELS = new Set([
-  'T4', 'T4A', 'T5', 'T5008', 'T4A(P)', 'T4RSP', 'T4E', 'T4A(OAS)', 'T3', 'T4RIF',
+  'T4', 'T4A', 'T5', 'T5008', 'T4AP', 'T4RSP', 'T4E', 'T4AOAS', 'T3', 'T4RIF',
 ]);
 
 type DocLike = {
@@ -62,7 +64,9 @@ export function classifyDocSection(doc: DocLike, knownSections?: Record<string, 
     return explicit;
   }
   // Q1 T-slip upload slots are keyed by the bare slip label ("T4", "T4A(P)").
-  const bare = String(doc.document_type || doc.documentType || doc.name || '').trim().toUpperCase();
+  const bare = String(doc.document_type || doc.documentType || doc.name || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
   if (T_SLIP_LABELS.has(bare)) return 'available_documents';
   const hay = [doc.name, doc.document_type, doc.documentType, doc.type]
     .filter(Boolean)
