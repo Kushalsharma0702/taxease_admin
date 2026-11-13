@@ -9,6 +9,7 @@ import { classifyDocSection } from './documentSections';
 import { getRideShareIncomes } from './rideShare';
 import { spouseDateLabel, spouseDateApplies } from './spouseDate';
 import { CATEGORY_TO_SECTION_KEY } from './api/config';
+import { provinceFilerAddress } from './provinceFilerAddress';
 
 interface PDFExportOptions {
   client: Client;
@@ -1235,15 +1236,26 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
     const pfRows = t1FormData.provinceFilerEntries.map((e: any) => [
       e.province || 'N/A',
       e.rentOrPropertyTax || 'N/A',
-      e.propertyAddress || 'N/A',
-      e.postalCode || 'N/A',
       (e.monthsResides ?? e.numberOfMonthsResides)?.toString() || 'N/A',
       formatCurrency(e.amountPaid ?? e.rentOrPropertyTaxAmount ?? 0),
     ]);
     autoTable(doc, {
       startY: yPosition,
-      head: [['Province', 'Rent/Property Tax', 'Address', 'Postal Code', 'No. Of Months Resides', 'Amount Paid']],
+      head: [['Province', 'Rent/Property Tax', 'No. Of Months Resides', 'Amount Paid']],
       body: pfRows,
+      theme: 'grid',
+      headStyles: { fillColor: [100, 100, 100], fontSize: 8 },
+      styles: { fontSize: 8 },
+    } as any);
+    // Property address, in the same separate parts as the app (older drafts show their one-line address under Street)
+    const addrRows = t1FormData.provinceFilerEntries.map((e: any, i: number) => {
+      const a = provinceFilerAddress(e);
+      return [`Entry ${i + 1}`, a.street || 'N/A', a.aptSuite || 'N/A', a.city || 'N/A', a.province || 'N/A', a.postalCode || 'N/A'];
+    });
+    autoTable(doc, {
+      startY: ((doc as any).lastAutoTable?.finalY ?? yPosition) + 4,
+      head: [['', 'Street Address', 'Apt / Suite / Unit', 'City', 'Province', 'Postal Code']],
+      body: addrRows,
       theme: 'grid',
       headStyles: { fillColor: [100, 100, 100], fontSize: 8 },
       styles: { fontSize: 8 },

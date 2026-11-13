@@ -29,6 +29,7 @@ const t1FormData: any = { id: 'f1', answers: [
   a('uploadedDocuments.rental_coowner1_city', 'Ajax'),
   a('isProvinceFiler', true), a('provinceFilerEntries[0].province', 'ON'), a('provinceFilerEntries[0].postalCode', 'M5J 0A9'),
   a('provinceFilerEntries[0].monthsResides', 11), a('provinceFilerEntries[0].propertyAddress', '12 York St'),
+  a('provinceFilerEntries[0].propertyStreet', '12 York St'), a('provinceFilerEntries[0].propertyAptSuite', 'Unit 907'), a('provinceFilerEntries[0].propertyCity', 'Toronto'), a('provinceFilerEntries[0].propertyProvince', 'Ontario'),
   a('isFilingForDeceased', true), a('deceasedReturnInfo.deceasedFullName', 'Late Person'),
   a('deceasedReturnInfo.deceasedMailingAddress', '7 Elm St, Ajax'), a('deceasedReturnInfo.deceasedMailingAddressStreet', '7 Elm St'),
   a('deceasedReturnInfo.deceasedMailingAddressCity', 'Ajax'), a('deceasedReturnInfo.legalRepresentativeAddressCity', 'Oshawa'),
@@ -67,6 +68,10 @@ has('uber: DoorDash income by service', 'DoorDash Income');
 has('uber: Lyft income amount', '585');
 has('rental: co-owner address includes the apt / suite / unit', 'Unit 12B');
 has('Q19: postal code', 'M5J 0A9');
+has('Q19: street', '12 York St');
+has('Q19: apt / suite / unit', 'Unit 907');
+has('Q19: city', 'Toronto');
+has('Q19: address province', 'Ontario');
 has('Q19: months resides column', 'No. Of Months Resides');
 has('deceased: structured mailing address', '7 Elm St, Ajax');
 // each document must sit under its own question: after that question's header, before the next one

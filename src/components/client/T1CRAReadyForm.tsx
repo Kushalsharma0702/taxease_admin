@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 
 import { convertApiDataToFormData } from '@/lib/t1FormAdapter';
+import { provinceFilerAddress } from '@/lib/provinceFilerAddress';
 
 
 interface T1CRAReadyFormProps {
@@ -1446,10 +1447,18 @@ export function T1CRAReadyForm({
                 <CopyableField label="Province" value={entry.province} />
               )}
               <CopyableField label="Rent or Property Tax" value={entry.rentOrPropertyTax || 'N/A'} />
-              <div className="sm:col-span-2">
-                <CopyableField label="Property Address" value={entry.propertyAddress} />
-              </div>
-              <CopyableField label="Postal Code" value={entry.postalCode || 'N/A'} />
+              {(() => {
+                const a = provinceFilerAddress(entry);
+                return (
+                  <>
+                    <CopyableField label="Street Address" value={a.street || 'N/A'} />
+                    <CopyableField label="Apt / Suite / Unit" value={a.aptSuite || 'N/A'} />
+                    <CopyableField label="City" value={a.city || 'N/A'} />
+                    <CopyableField label="Province (address)" value={a.province || 'N/A'} />
+                    <CopyableField label="Postal Code" value={a.postalCode || 'N/A'} />
+                  </>
+                );
+              })()}
               <CopyableField label="No. Of Months Resides" value={(entry.monthsResides || entry.numberOfMonthsResides)?.toString() || 'N/A'} />
               <CopyableField label="Amount Paid" value={formatCurrency(entry.amountPaid ?? entry.rentOrPropertyTaxAmount ?? entry.occupancyCost)} />
             </div>
