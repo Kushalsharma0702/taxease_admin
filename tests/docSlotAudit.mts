@@ -229,10 +229,6 @@ const LABELS: Row[] = [
   "serverSk": "moving_expenses"
  },
  {
-  "key": "Detailed claim moving expense receipt (Optional)",
-  "serverSk": "moving_expenses"
- },
- {
   "key": "Meals receipts (Optional)",
   "serverSk": null
  },
