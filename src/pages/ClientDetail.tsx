@@ -75,6 +75,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { summarizeDocuments } from '@/lib/documentStats';
 import { isMovingBack, isAlreadyFiled, MIN_BACK_REASON_LENGTH } from '@/lib/filingStatusOrder';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -414,11 +415,8 @@ export default function ClientDetail() {
 
   // Calculate overall document stats
   const overallStats = useMemo(() => {
-    const approved = documents.filter((d) => d.status === 'approved').length;
-    const pending = documents.filter((d) => d.status === 'pending' || d.status === 'complete').length;
-    const missing = documents.filter((d) => d.status === 'missing').length;
-    const reuploadRequested = documents.filter((d) => d.status === 'reupload_requested').length;
-    return { approved, pending, missing, reuploadRequested, total: documents.length };
+    const c = summarizeDocuments(documents);
+    return { approved: c.approved, pending: c.pending, missing: c.missing, reuploadRequested: c.reupload, total: c.total };
   }, [documents]);
 
   // The filing currently in view — the year selector below swaps which one
@@ -1470,29 +1468,35 @@ export default function ClientDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div className="flex items-center gap-3 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-                    <FileCheck className="h-8 w-8 text-green-500" />
-                    <div>
-                      <p className="text-2xl font-bold">{documents.filter((d) => d.status === 'complete').length}</p>
-                      <p className="text-sm text-muted-foreground">Complete</p>
+                {(() => {
+                  const c = summarizeDocuments(documents);
+                  const Card4 = ({ icon, tone, count, label, hint }: { icon: React.ReactNode; tone: string; count: number; label: string; hint: string }) => (
+                    <div className={`flex items-center gap-3 p-4 rounded-lg border ${tone}`} title={hint}>
+                      {icon}
+                      <div>
+                        <p className="text-2xl font-bold">{count}</p>
+                        <p className="text-sm text-muted-foreground">{label}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                    <FileQuestion className="h-8 w-8 text-yellow-500" />
-                    <div>
-                      <p className="text-2xl font-bold">{documents.filter((d) => d.status === 'pending').length}</p>
-                      <p className="text-sm text-muted-foreground">Pending</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
-                    <FileMinus className="h-8 w-8 text-destructive" />
-                    <div>
-                      <p className="text-2xl font-bold">{documents.filter((d) => d.status === 'missing').length}</p>
-                      <p className="text-sm text-muted-foreground">Missing</p>
-                    </div>
-                  </div>
-                </div>
+                  );
+                  return (
+                    <>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <Card4 icon={<FileCheck className="h-8 w-8 text-green-500" />} tone="bg-green-500/10 border-green-500/20"
+                          count={c.approved} label="Approved" hint="Checked and approved by an admin" />
+                        <Card4 icon={<FileQuestion className="h-8 w-8 text-yellow-500" />} tone="bg-yellow-500/10 border-yellow-500/20"
+                          count={c.pending} label="Pending review" hint="Sent by the client, not checked yet" />
+                        <Card4 icon={<RotateCcw className="h-8 w-8 text-orange-500" />} tone="bg-orange-500/10 border-orange-500/20"
+                          count={c.reupload} label="Re-upload requested" hint="An admin asked the client to send it again" />
+                        <Card4 icon={<FileMinus className="h-8 w-8 text-destructive" />} tone="bg-destructive/10 border-destructive/20"
+                          count={c.missing} label="Missing / rejected" hint="Marked missing or rejected by an admin" />
+                      </div>
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        {c.total} document{c.total === 1 ? '' : 's'} in total. A document counts once, by its latest status.
+                      </p>
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1731,6 +1735,12 @@ export default function ClientDetail() {
                         <Clock className="h-3.5 w-3.5" />
                         <span className="font-medium">{overallStats.pending}</span>
                       </div>
+                      {overallStats.reuploadRequested > 0 && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/10 text-orange-600" title="Re-upload requested">
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          <span className="font-medium">{overallStats.reuploadRequested}</span>
+                        </div>
+                      )}
                       {overallStats.missing > 0 && (
                         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-destructive/10 text-destructive">
                           <FileMinus className="h-3.5 w-3.5" />
