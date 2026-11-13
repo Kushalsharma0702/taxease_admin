@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { UnavailableDocRow } from '@/components/client/UnavailableDocRow';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
@@ -379,23 +380,13 @@ export function QuestionDocuments({
 
         {/* Marked "not available" by the client in the app */}
         {unavailableDocs.map((key) => (
-          <div
+          <UnavailableDocRow
             key={`unavailable-${key}`}
-            className="flex items-center justify-between p-3 rounded-lg border border-dashed bg-muted/30"
-          >
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 bg-muted">
-                <AlertCircle className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{prettifyDocKey(key)}</p>
-                <p className="text-xs text-muted-foreground">Client marked this document as not available</p>
-              </div>
-            </div>
-            <Badge variant="outline" className="text-xs shrink-0 bg-muted text-muted-foreground border-border">
-              ⚪ Not available
-            </Badge>
-          </div>
+            docName={prettifyDocKey(key)}
+            requested={requestedDocNames.has(prettifyDocKey(key))}
+            canRequest={!!(canEdit && onRequestMissing)}
+            onRequest={(name, message) => onRequestMissing?.(name, message)}
+          />
         ))}
 
         {/* Missing Required Documents */}

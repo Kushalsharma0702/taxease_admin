@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { T1CRAReadyForm } from '@/components/client/T1CRAReadyForm';
 import { RequestedDocsContext, UnavailableDocsContext } from '@/components/client/QuestionDocuments';
+import { UnavailableDocRow } from '@/components/client/UnavailableDocRow';
 import { convertApiDataToFormData } from '@/lib/t1FormAdapter';
 import { DocumentActionRow } from '@/components/client/DocumentActionRow';
 import { PIPELINE_STATUS_LABELS, ADMIN_SETTABLE_STATUSES, FILED_STATUS_HELP, COMPLETED_STATUS_HELP, ClientStatus, PERMISSIONS, Note, Document as DocType, T1Question, DocumentStatus, TaxFile } from '@/types';
@@ -1764,18 +1765,13 @@ export default function ClientDetail() {
                         </div>
                         <div className="space-y-2">
                           {(unavailableBySection.get(sectionKey) || []).map((key) => (
-                            <div
+                            <UnavailableDocRow
                               key={`unavailable-${key}`}
-                              className="flex items-center justify-between p-3 rounded-lg border border-dashed bg-muted/30"
-                            >
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium truncate">{prettifyDocKey(key)}</p>
-                                <p className="text-xs text-muted-foreground">Client marked this document as not available</p>
-                              </div>
-                              <Badge variant="outline" className="text-xs shrink-0 bg-muted text-muted-foreground">
-                                Not available
-                              </Badge>
-                            </div>
+                              docName={prettifyDocKey(key)}
+                              requested={requestedDocNames.has(prettifyDocKey(key))}
+                              canRequest={hasPermission(PERMISSIONS.REQUEST_DOCUMENTS)}
+                              onRequest={handleRequestDocument}
+                            />
                           ))}
                           {docs.map((doc: any) => (
                             <DocumentActionRow
