@@ -1,6 +1,6 @@
 import { classifyDocSection, unavailableDocsForSection, withoutUploadedSlots, prettifyDocKey } from '@/lib/documentSections';
 import { summarizePayments } from '@/lib/paymentSummary';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -77,6 +77,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { summarizeDocuments } from '@/lib/documentStats';
+import { useClientActivity } from '@/hooks/useClientActivity';
+import { describeNew, timeAgo } from '@/lib/clientActivity';
 import { isMovingBack, isAlreadyFiled, MIN_BACK_REASON_LENGTH } from '@/lib/filingStatusOrder';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -98,6 +100,15 @@ export default function ClientDetail() {
   const { toast } = useToast();
 
   const [client, setClient] = useState<any>(null);
+  // New data from this client (highlighted until this admin has looked at it).
+  const clientActivity = useClientActivity();
+  const newKinds = clientActivity.newKinds(client?.email);
+  const markSeenRef = useRef(clientActivity.markSeen);
+  markSeenRef.current = clientActivity.markSeen;
+  const clientEmailRef = useRef('');
+  clientEmailRef.current = client?.email || '';
+  // Leaving the page counts as "seen"; anything that arrives while it is open is still new next time.
+  useEffect(() => () => { if (clientEmailRef.current) markSeenRef.current(clientEmailRef.current); }, []);
   const [allFilings, setAllFilings] = useState<any[]>([]);
   const [selectedFilingId, setSelectedFilingId] = useState<string | null>(null);
   const [isLoadingFiling, setIsLoadingFiling] = useState(false);
@@ -1121,6 +1132,24 @@ export default function ClientDetail() {
           </div>
         </div>
 
+        {/* New data from the client */}
+        {client?.email && clientActivity.isNew(client.email) && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+            <div className="flex items-start gap-3">
+              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-500 animate-pulse" />
+              <div>
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-300">New data from this client</p>
+                <p className="text-xs text-amber-800 dark:text-amber-400">
+                  {describeNew(clientActivity.newKinds(client.email))} · {timeAgo(clientActivity.newestAt(client.email))}
+                </p>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => clientActivity.markSeen(client.email)}>
+              Mark as seen
+            </Button>
+          </div>
+        )}
+
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-7 lg:w-auto lg:inline-flex">
@@ -1131,10 +1160,12 @@ export default function ClientDetail() {
             <TabsTrigger value="cra-form" className="transition-all duration-200">
               <FileText className="h-4 w-4 mr-2" />
               Detailed Data
+              {(newKinds.includes('form_submitted') || newKinds.includes('form_updated')) && <span className="ml-1.5 h-2 w-2 rounded-full bg-amber-500 animate-pulse" title="New data from the client" />}
             </TabsTrigger>
             <TabsTrigger value="questionnaire" className="transition-all duration-200">
               <FileText className="h-4 w-4 mr-2" />
               Documents
+              {(newKinds.includes('document_uploaded')) && <span className="ml-1.5 h-2 w-2 rounded-full bg-amber-500 animate-pulse" title="New data from the client" />}
             </TabsTrigger>
             <TabsTrigger value="payments" className="transition-all duration-200">
               <CreditCard className="h-4 w-4 mr-2" />
@@ -1143,6 +1174,7 @@ export default function ClientDetail() {
             <TabsTrigger value="tax-files" className="transition-all duration-200">
               <FileText className="h-4 w-4 mr-2" />
               Tax Files
+              {(newKinds.includes('client_action')) && <span className="ml-1.5 h-2 w-2 rounded-full bg-amber-500 animate-pulse" title="New data from the client" />}
             </TabsTrigger>
             <TabsTrigger value="notes" className="transition-all duration-200">
               <MessageSquare className="h-4 w-4 mr-2" />

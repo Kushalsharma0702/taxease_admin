@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DataTable } from '@/components/ui/data-table';
@@ -33,16 +33,20 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Client, STATUS_LABELS, ClientStatus, PERMISSIONS } from '@/types';
-import { Plus, Download, Trash2, Edit, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Plus, Download, Trash2, Edit, Loader2, RefreshCw, AlertTriangle, BellRing } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/services/api';
+import { useClientActivity } from '@/hooks/useClientActivity';
+import { describeNew, newClientCount, timeAgo } from '@/lib/clientActivity';
 
 export default function Clients() {
   const navigate = useNavigate();
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
+  const activity = useClientActivity();
+  const [onlyNew, setOnlyNew] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [yearFilter, setYearFilter] = useState<string>('all');
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -156,6 +160,15 @@ export default function Clients() {
   }, [fetchClients]);
 
   const filteredClients = clients;
+  const newCount = newClientCount(activity.activity, activity.state, clients.map((c) => c.email));
+  // Rows carry the client's last activity time so the column can be sorted.
+  const tableRows = useMemo(
+    () => clients
+      .map((c) => ({ ...c, lastClientActivityAt: activity.lastAt(c.email) }))
+      .filter((c) => !onlyNew || activity.isNew(c.email)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [clients, onlyNew, activity.activity, activity.state],
+  );
 
   const columns = [
     {
@@ -164,8 +177,24 @@ export default function Clients() {
       sortable: true,
       render: (client: Client) => (
         <div>
-          <p className="font-medium">{client.name}</p>
+          <p className="font-medium flex items-center gap-2">
+            {client.name}
+            {activity.isNew(client.email) && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400 whitespace-nowrap"
+                title={`New from the client: ${describeNew(activity.newKinds(client.email))}`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                New data
+              </span>
+            )}
+          </p>
           <p className="text-xs text-muted-foreground">{client.email}</p>
+          {activity.isNew(client.email) && (
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              {describeNew(activity.newKinds(client.email))} · {timeAgo(activity.newestAt(client.email))}
+            </p>
+          )}
         </div>
       ),
     },
@@ -208,6 +237,16 @@ export default function Clients() {
             </span>
           )}
         </div>
+      ),
+    },
+    {
+      key: 'lastClientActivityAt',
+      header: 'Last client activity',
+      sortable: true,
+      render: (client: Client & { lastClientActivityAt?: string }) => (
+        <span className="text-sm text-muted-foreground whitespace-nowrap" title={client.lastClientActivityAt || ''}>
+          {client.lastClientActivityAt ? timeAgo(client.lastClientActivityAt) : '—'}
+        </span>
       ),
     },
     {
@@ -443,6 +482,23 @@ export default function Clients() {
             add real pagination now that the client count has passed 200.
           </div>
         )}
+        {/* New data from clients (highlighted until this admin opens the client or marks it seen) */}
+        {activity.loaded && newCount > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-2.5">
+            <div className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-300">
+              <BellRing className="h-4 w-4" />
+              {newCount} client{newCount === 1 ? '' : 's'} sent new data since you last looked
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant={onlyNew ? 'default' : 'outline'} onClick={() => setOnlyNew((v) => !v)}>
+                {onlyNew ? 'Show all clients' : 'Show only these'}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => { activity.markAllSeen(); setOnlyNew(false); }}>
+                Mark all as seen
+              </Button>
+            </div>
+          </div>
+        )}
         {/* Header Actions */}
         <div className="flex flex-col sm:flex-row gap-4 justify-between">
           <div className="flex items-center gap-3">
@@ -564,8 +620,9 @@ export default function Clients() {
 
         {/* Data Table */}
         <DataTable
-          data={filteredClients}
+          data={tableRows}
           columns={columns}
+          rowClassName={(c) => (activity.isNew(c.email) ? 'bg-amber-500/10 border-l-4 border-l-amber-500' : '')}
           searchKey={['name', 'email']}
           searchPlaceholder="Search by name or email..."
           onRowClick={(client) => navigate(`/clients/${client.id}`)}

@@ -330,6 +330,11 @@ class ApiService {
     return this.request<Array<{ id: string; name: string; role: string }>>('/admin-users/assignable');
   }
 
+  // When each client last did something in the app (upload, form save/submit, response on the return).
+  async getClientActivity(): Promise<import('@/lib/clientActivity').ActivityResponse> {
+    return this.request('/client-activity');
+  }
+
   // Default tax year for returns an admin creates by hand (stored on the server, see /settings).
   async getDefaultFilingYear(): Promise<{ year: number; source: 'saved' | 'default'; options: number[] }> {
     return this.request('/settings/default-filing-year');

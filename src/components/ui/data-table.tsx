@@ -32,6 +32,8 @@ interface DataTableProps<T> {
   searchPlaceholder?: string;
   pageSize?: number;
   onRowClick?: (item: T) => void;
+  /** Extra classes for a row (e.g. to highlight rows that need attention). */
+  rowClassName?: (item: T) => string;
 }
 
 export function DataTable<T extends { id: string }>({
@@ -41,6 +43,7 @@ export function DataTable<T extends { id: string }>({
   searchPlaceholder = 'Search...',
   pageSize = 10,
   onRowClick,
+  rowClassName,
 }: DataTableProps<T>) {
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -137,7 +140,7 @@ export function DataTable<T extends { id: string }>({
               paginatedData.map((item) => (
                 <TableRow
                   key={item.id}
-                  className={onRowClick ? 'cursor-pointer hover:bg-muted/50' : ''}
+                  className={`${onRowClick ? 'cursor-pointer hover:bg-muted/50' : ''} ${rowClassName?.(item) ?? ''}`}
                   onClick={() => onRowClick?.(item)}
                 >
                   {columns.map((column) => (
