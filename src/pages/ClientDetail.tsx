@@ -76,7 +76,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { summarizeDocuments } from '@/lib/documentStats';
+import { summarizeDocuments, documentsAwaitingReview } from '@/lib/documentStats';
 import { useClientActivity } from '@/hooks/useClientActivity';
 import { describeNew, timeAgo } from '@/lib/clientActivity';
 import { isMovingBack, isAlreadyFiled, MIN_BACK_REASON_LENGTH } from '@/lib/filingStatusOrder';
@@ -114,6 +114,9 @@ export default function ClientDetail() {
   const [isLoadingFiling, setIsLoadingFiling] = useState(false);
   const [t1FormData, setT1FormData] = useState<any>(null);
   const [isUnlockOpen, setIsUnlockOpen] = useState(false);
+  const [isApproveAllOpen, setIsApproveAllOpen] = useState(false);
+  const [isApprovingAll, setIsApprovingAll] = useState(false);
+  const [approveProgress, setApproveProgress] = useState({ done: 0, total: 0 });
   const [unlockReason, setUnlockReason] = useState('');
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [isLockOpen, setIsLockOpen] = useState(false);
@@ -878,6 +881,30 @@ export default function ClientDetail() {
     } catch {
       toast({ title: 'Document Approved', description: 'Status updated.' });
     }
+  };
+
+  // Approve every document that is waiting for review. Silent to the client, like approving one by one.
+  const handleApproveAll = async () => {
+    const targets = documentsAwaitingReview(documents);
+    if (targets.length === 0) { setIsApproveAllOpen(false); return; }
+    setIsApprovingAll(true);
+    setApproveProgress({ done: 0, total: targets.length });
+    const approvedIds = new Set<string>();
+    const failed: string[] = [];
+    for (let i = 0; i < targets.length; i += 5) {
+      const chunk = targets.slice(i, i + 5);
+      await Promise.all(chunk.map(async (d: any) => {
+        try { await api.updateDocument(d.id, { status: 'approved' }); approvedIds.add(d.id); }
+        catch { failed.push(d.name || d.id); }
+      }));
+      setApproveProgress({ done: Math.min(i + 5, targets.length), total: targets.length });
+    }
+    setDocuments((prev) => prev.map((d) => (approvedIds.has(d.id) ? { ...d, status: 'approved' as DocumentStatus } : d)));
+    setIsApprovingAll(false);
+    setIsApproveAllOpen(false);
+    toast(failed.length === 0
+      ? { title: 'All documents approved', description: `${approvedIds.size} document${approvedIds.size === 1 ? '' : 's'} approved. The client was not notified.` }
+      : { title: 'Some documents were not approved', description: `${approvedIds.size} approved, ${failed.length} failed: ${failed.slice(0, 3).join(', ')}${failed.length > 3 ? '…' : ''}. Try again for the rest.`, variant: 'destructive' });
   };
 
   const handleRequestReupload = async (docId: string, reason: string) => {
@@ -1759,7 +1786,20 @@ export default function ClientDetail() {
                         {documents.length} document{documents.length === 1 ? '' : 's'} across {ordered.length} section{ordered.length === 1 ? '' : 's'}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-3 text-sm">
+                      {hasPermission(PERMISSIONS.REQUEST_DOCUMENTS) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={documentsAwaitingReview(documents).length === 0 || isApprovingAll}
+                          onClick={() => setIsApproveAllOpen(true)}
+                          title={documentsAwaitingReview(documents).length === 0 ? 'Nothing is waiting for review' : 'Approve every document waiting for review'}
+                          className="border-green-500/40 text-green-700 hover:bg-green-500/10"
+                        >
+                          <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                          Approve all{documentsAwaitingReview(documents).length > 0 ? ` (${documentsAwaitingReview(documents).length})` : ''}
+                        </Button>
+                      )}
                       <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-green-600">
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         <span className="font-medium">{overallStats.approved}</span>
@@ -2321,6 +2361,30 @@ export default function ClientDetail() {
             <Button onClick={handleLockT1Form} disabled={isLocking}>
               {isLocking && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Lock Form
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Approve all documents */}
+      <Dialog open={isApproveAllOpen} onOpenChange={(o) => { if (!isApprovingAll) setIsApproveAllOpen(o); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Approve all documents?</DialogTitle>
+            <DialogDescription>
+              {documentsAwaitingReview(documents).length} document{documentsAwaitingReview(documents).length === 1 ? '' : 's'} waiting for review will be marked as approved.
+              Documents you already approved, asked the client to re-upload, or marked missing or rejected are not changed.
+              The client is not notified.
+            </DialogDescription>
+          </DialogHeader>
+          {isApprovingAll && (
+            <p className="text-sm text-muted-foreground">Approving… {approveProgress.done} of {approveProgress.total}</p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsApproveAllOpen(false)} disabled={isApprovingAll}>Cancel</Button>
+            <Button onClick={handleApproveAll} disabled={isApprovingAll || documentsAwaitingReview(documents).length === 0}>
+              {isApprovingAll && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Approve all
             </Button>
           </DialogFooter>
         </DialogContent>

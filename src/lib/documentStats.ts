@@ -27,3 +27,9 @@ export function summarizeDocuments(docs: Array<{ status?: string | null }> | nul
   for (const d of docs || []) { out[documentBucket(d?.status)] += 1; out.total += 1; }
   return out;
 }
+
+/** Documents an "Approve all" should approve: the ones waiting for review (pending / uploaded). Anything the
+ *  admin already approved, asked to be re-uploaded, or marked missing / rejected is left exactly as it is. */
+export function documentsAwaitingReview<T extends { status?: string | null }>(docs: T[] | null | undefined): T[] {
+  return (docs || []).filter((d) => documentBucket(d?.status) === 'pending');
+}

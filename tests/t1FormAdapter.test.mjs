@@ -64,5 +64,19 @@ const r = rent[0] || {};
 eq("7.10 rental CCA (other) details/amount/date", [r.ccaOtherDetails, r.ccaOtherAmount, r.ccaOtherPurchaseDate], ["Fridge", "650", "2025-03-01"]);
 eq("7.11 rental property tax + house insurance", [r.propertyTaxes, r.houseInsurance], ["3000", "900"]);
 
+// Q20: every disability member the client adds must reach the admin (they used to collapse into one)
+const mem = (i, first, rel, yr) => [a(`disabilityClaimMembers[${i}].firstName`, first), a(`disabilityClaimMembers[${i}].lastName`, "Rao"),
+  a(`disabilityClaimMembers[${i}].relation`, rel), a(`disabilityClaimMembers[${i}].approvedYear`, yr), a(`disabilityClaimMembers[${i}].fromYear`, "2022")];
+const three = conv({ answers: [a("hasDisabilityTaxCredit", true), ...mem(0, "Asha", "Spouse", "2024"), ...mem(1, "Ben", "Child", "2023"), ...mem(2, "Cara", "Parent", "2021"), a("disabilityMemberCount", 3)] });
+eq("Q20 all three members reach the admin, in order", three.disabilityTaxCredit.map((d) => d.firstName), ["Asha", "Ben", "Cara"]);
+eq("Q20 each member keeps its own relation and year", three.disabilityTaxCredit.map((d) => [d.relation, String(d.approvedYear)]), [["Spouse", "2024"], ["Child", "2023"], ["Parent", "2021"]]);
+const removed = conv({ answers: [a("hasDisabilityTaxCredit", true), ...mem(0, "Asha", "Spouse", "2024"), ...mem(1, "Ben", "Child", "2023"), ...mem(2, "Cara", "Parent", "2021"), a("disabilityMemberCount", 2)] });
+eq("Q20 a member the client removed (old keys still on the server) is not shown", removed.disabilityTaxCredit.map((d) => d.firstName), ["Asha", "Ben"]);
+const legacy = conv({ answers: [a("hasDisabilityTaxCredit", true), a("hasDisabilityTaxCredit.first_name", "Asha"), a("hasDisabilityTaxCredit.last_name", "Rao"), a("hasDisabilityTaxCredit.relation", "Spouse"), a("hasDisabilityTaxCredit.approved_year", "2024")] });
+eq("Q20 an older draft (one set of index-free keys) still shows its one member", legacy.disabilityTaxCredit.map((d) => [d.firstName, d.relation, d.approvedYear]), [["Asha", "Spouse", "2024"]]);
+const gap = conv({ answers: [a("hasDisabilityTaxCredit", true), ...mem(0, "Asha", "Spouse", "2024"), ...mem(2, "Cara", "Parent", "2021")] });
+eq("Q20 an index with no data does not show as an empty member", gap.disabilityTaxCredit.map((d) => d.firstName), ["Asha", "Cara"]);
+eq("Q20 no members: nothing shown", conv({ answers: [a("hasDisabilityTaxCredit", false)] }).disabilityTaxCredit, []);
+
 console.log(`${pass}/${total} passed`);
 process.exit(pass === total ? 0 : 1);

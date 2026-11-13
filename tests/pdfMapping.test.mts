@@ -31,6 +31,11 @@ const t1FormData: any = { id: 'f1', answers: [
   a('isProvinceFiler', true), a('provinceFilerEntries[0].province', 'ON'), a('provinceFilerEntries[0].postalCode', 'M5J 0A9'),
   a('provinceFilerEntries[0].monthsResides', 11), a('provinceFilerEntries[0].propertyAddress', '12 York St'),
   a('provinceFilerEntries[0].propertyStreet', '12 York St'), a('provinceFilerEntries[0].propertyAptSuite', 'Unit 907'), a('provinceFilerEntries[0].propertyCity', 'Toronto'), a('provinceFilerEntries[0].propertyProvince', 'Ontario'),
+  a('hasDisabilityTaxCredit', true),
+  a('disabilityClaimMembers[0].firstName', 'Asha'), a('disabilityClaimMembers[0].lastName', 'Rao'), a('disabilityClaimMembers[0].relation', 'Spouse'),
+  a('disabilityClaimMembers[1].firstName', 'Benedict'), a('disabilityClaimMembers[1].lastName', 'Rao'), a('disabilityClaimMembers[1].relation', 'Child'),
+  a('disabilityClaimMembers[2].firstName', 'Carlotta'), a('disabilityClaimMembers[2].lastName', 'Rao'), a('disabilityClaimMembers[2].relation', 'Parent'),
+  a('disabilityMemberCount', 3),
   a('hasOtherIncome', true), a('otherIncomeDescription', 'Cash tutoring'), a('otherIncomeAmount', 1250.5),
   a('isFilingForDeceased', true), a('deceasedReturnInfo.deceasedFullName', 'Late Person'),
   a('deceasedReturnInfo.deceasedMailingAddress', '7 Elm St, Ajax'), a('deceasedReturnInfo.deceasedMailingAddressStreet', '7 Elm St'),
@@ -69,6 +74,9 @@ has('uber: Uber Ride income by service', 'Uber Ride Income');
 has('uber: DoorDash income by service', 'DoorDash Income');
 has('uber: Lyft income amount', '585');
 has('rental: co-owner address includes the apt / suite / unit', 'Unit 12B');
+has('Q20: first disability member', 'Asha');
+has('Q20: second disability member', 'Benedict');
+has('Q20: third disability member', 'Carlotta');
 has('Q15: description of income', 'Cash tutoring');
 has('Q15: amount as its own value', '1,250.50');
 has('Q15: column heading', 'Description of income');

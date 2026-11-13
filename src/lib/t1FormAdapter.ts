@@ -57,6 +57,16 @@ export function buildOtherIncome(answers: Record<string, any>, hasOtherIncome: b
   return [{ description, amount }];
 }
 
+
+// Q20 disability tax credit members. The server only adds/updates answers, so a member the client removed
+// leaves its old keys behind; the app also saves disabilityMemberCount, and anything past it is ignored.
+// Gaps (an index with no data at all) are dropped too.
+export function disabilityMembersFromAnswers(members: any[], savedCount: unknown): any[] {
+  const raw = savedCount === undefined || savedCount === null || savedCount === '' ? NaN : Number(savedCount);
+  const capped = Number.isFinite(raw) && raw >= 0 && members.length > raw ? members.slice(0, raw) : members;
+  return capped.filter((m: any) => m && typeof m === 'object' && (m.firstName || m.lastName || m.relation || m.approvedYear || m.fromYear || m.toYear));
+}
+
 export function convertApiDataToFormData(t1Data: any) {
   if (!t1Data || !t1Data.answers) return null;
 
@@ -518,9 +528,9 @@ export function convertApiDataToFormData(t1Data: any) {
     disabilities: answersMap.hasDisabilityTaxCredit ? (answersMap.disabilities || {}) : null,
     disabilityTaxCredit: (() => {
       if (!answersMap.hasDisabilityTaxCredit && !Array.isArray(answersMap.disabilityClaimMembers)) return [];
-      // Prefer explicit disabilityClaimMembers array if present
+      // Prefer explicit disabilityClaimMembers array if present (the app saves every member under its own index).
       if (Array.isArray(answersMap.disabilityClaimMembers) && answersMap.disabilityClaimMembers.length > 0) {
-        return answersMap.disabilityClaimMembers;
+        return disabilityMembersFromAnswers(answersMap.disabilityClaimMembers, answersMap.disabilityMemberCount);
       }
       // Flutter remaps members to hasDisabilityTaxCredit.* (snake_case), rebuild one member object
       const dtc = typeof answersMap.hasDisabilityTaxCredit === 'object' ? answersMap.hasDisabilityTaxCredit : {};
