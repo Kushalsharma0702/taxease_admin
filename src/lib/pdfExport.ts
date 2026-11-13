@@ -10,6 +10,7 @@ import { getRideShareIncomes } from './rideShare';
 import { spouseDateLabel, spouseDateApplies } from './spouseDate';
 import { CATEGORY_TO_SECTION_KEY } from './api/config';
 import { provinceFilerAddress } from './provinceFilerAddress';
+import { otherIncomeAmountText } from './otherIncome';
 
 interface PDFExportOptions {
   client: Client;
@@ -1176,10 +1177,10 @@ export async function exportClientPDF(options: PDFExportOptions): Promise<void> 
   const hasOtherIncome = t1FormData?.otherIncome && t1FormData.otherIncome.length > 0;
   addSectionHeader('Q15: Other Income', hasOtherIncome);
   if (hasOtherIncome) {
-    const oiRows = t1FormData.otherIncome.map((o: any) => [o.description || 'N/A', formatCurrency(o.amount || 0)]);
+    const oiRows = t1FormData.otherIncome.map((o: any) => [o.description || 'N/A', otherIncomeAmountText(o.amount, formatCurrency)]);
     autoTable(doc, {
       startY: yPosition,
-      head: [['Description', 'Amount']],
+      head: [['Description of income', 'Amount']],
       body: oiRows,
       theme: 'grid',
       headStyles: { fillColor: [100, 100, 100], fontSize: 8 },

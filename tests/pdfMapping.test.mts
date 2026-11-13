@@ -3,6 +3,7 @@
 import { jsPDF } from 'jspdf';
 import { exportClientPDF } from '../src/lib/pdfExport';
 
+
 let captured = '';
 // jsPDF copies its API onto each instance, so the hook goes on jsPDF.API (not the prototype).
 (jsPDF as any).API.save = function () { captured = this.output(); };
@@ -30,6 +31,7 @@ const t1FormData: any = { id: 'f1', answers: [
   a('isProvinceFiler', true), a('provinceFilerEntries[0].province', 'ON'), a('provinceFilerEntries[0].postalCode', 'M5J 0A9'),
   a('provinceFilerEntries[0].monthsResides', 11), a('provinceFilerEntries[0].propertyAddress', '12 York St'),
   a('provinceFilerEntries[0].propertyStreet', '12 York St'), a('provinceFilerEntries[0].propertyAptSuite', 'Unit 907'), a('provinceFilerEntries[0].propertyCity', 'Toronto'), a('provinceFilerEntries[0].propertyProvince', 'Ontario'),
+  a('hasOtherIncome', true), a('otherIncomeDescription', 'Cash tutoring'), a('otherIncomeAmount', 1250.5),
   a('isFilingForDeceased', true), a('deceasedReturnInfo.deceasedFullName', 'Late Person'),
   a('deceasedReturnInfo.deceasedMailingAddress', '7 Elm St, Ajax'), a('deceasedReturnInfo.deceasedMailingAddressStreet', '7 Elm St'),
   a('deceasedReturnInfo.deceasedMailingAddressCity', 'Ajax'), a('deceasedReturnInfo.legalRepresentativeAddressCity', 'Oshawa'),
@@ -67,6 +69,9 @@ has('uber: Uber Ride income by service', 'Uber Ride Income');
 has('uber: DoorDash income by service', 'DoorDash Income');
 has('uber: Lyft income amount', '585');
 has('rental: co-owner address includes the apt / suite / unit', 'Unit 12B');
+has('Q15: description of income', 'Cash tutoring');
+has('Q15: amount as its own value', '1,250.50');
+has('Q15: column heading', 'Description of income');
 has('Q19: postal code', 'M5J 0A9');
 has('Q19: street', '12 York St');
 has('Q19: apt / suite / unit', 'Unit 907');

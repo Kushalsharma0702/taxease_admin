@@ -37,6 +37,26 @@ function pickMovingAddressParts(src: any): Record<string, string> {
 }
 
 // Convert API T1 form data to the format expected by the component
+
+// Q15 "Other income without T-slips": the app saves the description and the amount as two separate answers
+// (otherIncomeDescription, otherIncomeAmount). An older draft only has the description, with the amount written
+// inside it: for those the amount is null ("not entered separately") rather than a misleading $0.00.
+const otherIncomeNum = (v: unknown): number | null => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[$,\s]/g, ''));
+  return Number.isFinite(n) ? n : null;
+};
+export function buildOtherIncome(answers: Record<string, any>, hasOtherIncome: boolean): Array<{ description: string; amount: number | null }> {
+  if (Array.isArray(answers.otherIncome) && answers.otherIncome.length > 0) {
+    return answers.otherIncome.map((o: any) => ({ description: o.description || o.source || '', amount: otherIncomeNum(o.amount) ?? 0 }));
+  }
+  if (!hasOtherIncome) return [];
+  const description = String(answers.otherIncomeDescription ?? '').trim();
+  const amount = otherIncomeNum(answers.otherIncomeAmount);
+  if (!description && !(amount && amount > 0)) return [];
+  return [{ description, amount }];
+}
+
 export function convertApiDataToFormData(t1Data: any) {
   if (!t1Data || !t1Data.answers) return null;
 
@@ -534,11 +554,7 @@ export function convertApiDataToFormData(t1Data: any) {
         } : null),
     deceasedReturn: (parseBool(answersMap.isFilingForDeceased) || !!answersMap.deceasedReturnInfo) ? (answersMap.deceasedReturnInfo || null) : null,
     // Other income: use array if present, otherwise build from description string
-    otherIncome: Array.isArray(answersMap.otherIncome) && answersMap.otherIncome.length > 0
-      ? answersMap.otherIncome.map((o: any) => ({ description: o.description || o.source || '', amount: parseFloat(o.amount) || 0 }))
-      : (parseBool(answersMap.hasOtherIncome) && answersMap.otherIncomeDescription
-          ? [{ description: answersMap.otherIncomeDescription, amount: 0 }]
-          : []),
+    otherIncome: buildOtherIncome(answersMap, parseBool(answersMap.hasOtherIncome)),
     // Per-document filename map, repurposed by the mobile app to also carry
     // rental co-owner extra details under composite keys like
     // "rental_coowner1_sin" / "_dob" / "_street" / "_city" / "_province" / "_postal".

@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 
 import { convertApiDataToFormData } from '@/lib/t1FormAdapter';
+import { otherIncomeAmountText } from '@/lib/otherIncome';
 import { provinceFilerAddress } from '@/lib/provinceFilerAddress';
 
 
@@ -1337,8 +1338,8 @@ export function T1CRAReadyForm({
       >
         <CopyableTable
           columns={[
-            { key: 'description', header: 'Description' },
-            { key: 'amount', header: 'Amount', format: (v) => formatCurrency(v as number) },
+            { key: 'description', header: 'Description of income' },
+            { key: 'amount', header: 'Amount', format: (v) => otherIncomeAmountText(v as number | null, formatCurrency) },
           ]}
           data={formData.otherIncome || []}
           emptyMessage="No other income reported"
