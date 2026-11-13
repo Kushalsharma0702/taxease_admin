@@ -75,6 +75,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { isMovingBack, isAlreadyFiled, MIN_BACK_REASON_LENGTH } from '@/lib/filingStatusOrder';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { exportClientPDF } from '@/lib/pdfExport';
@@ -950,9 +951,10 @@ export default function ClientDetail() {
       const clientWasNotified =
         result.status === 'filed' ||
         (result.status === 'completed' && filingStatus === 'approved_by_client');
+      const wentBack = isMovingBack(filingStatus, result.status);
       toast({
-        title: 'Filing Status Updated',
-        description: `Now "${result.status_display}"${clientWasNotified ? ' — client notified.' : '.'}`,
+        title: wentBack ? 'Status Moved Back' : 'Filing Status Updated',
+        description: `Now "${result.status_display}"${wentBack ? ' — the client was not notified.' : clientWasNotified ? ' — client notified.' : '.'}`,
       });
     } catch (err) {
       toast({
@@ -2315,10 +2317,28 @@ export default function ClientDetail() {
                 <p className="text-xs text-muted-foreground">{COMPLETED_STATUS_HELP}</p>
               )}
             </div>
+            {pendingFilingStatus && isMovingBack(filingStatus, pendingFilingStatus) && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 space-y-1">
+                <p className="font-medium">You are moving this filing back on the timeline.</p>
+                <p>The client is not notified, but the steps after it will show as not done in their app.</p>
+                {(pendingFilingStatus === 'awaiting_approval' || pendingFilingStatus === 'changes_requested') && (
+                  <p>If the client had already approved, upload the revised return again before sending it for approval.</p>
+                )}
+                {isAlreadyFiled(filingStatus) && user?.role !== 'superadmin' && (
+                  <p className="font-medium text-red-700">This return was already e-filed. Only a super admin can move it back.</p>
+                )}
+              </div>
+            )}
             <div className="space-y-2">
-              <Label>Note to client (optional)</Label>
+              <Label>
+                {pendingFilingStatus && isMovingBack(filingStatus, pendingFilingStatus)
+                  ? 'Reason for moving back (required)'
+                  : 'Note to client (optional)'}
+              </Label>
               <Textarea
-                placeholder="e.g., We've received your payment and started preparing your return."
+                placeholder={pendingFilingStatus && isMovingBack(filingStatus, pendingFilingStatus)
+                  ? 'e.g., Client sent a corrected slip, so the return is being redone.'
+                  : "e.g., We've received your payment and started preparing your return."}
                 value={filingStatusNotes}
                 onChange={(e) => setFilingStatusNotes(e.target.value)}
               />
@@ -2326,7 +2346,7 @@ export default function ClientDetail() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsFilingStatusOpen(false)}>Cancel</Button>
-            <Button onClick={handleUpdateFilingStatus} disabled={isUpdatingFilingStatus || !pendingFilingStatus}>
+            <Button onClick={handleUpdateFilingStatus} disabled={isUpdatingFilingStatus || !pendingFilingStatus || (isMovingBack(filingStatus, pendingFilingStatus) && filingStatusNotes.trim().length < MIN_BACK_REASON_LENGTH)}>
               {isUpdatingFilingStatus && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Update Status
             </Button>
