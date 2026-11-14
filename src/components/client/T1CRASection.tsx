@@ -1,10 +1,14 @@
-import { Children, useState } from 'react';
+import { Children, createContext, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+
+// Whether the client's answer to this section's question was Yes (true) or No / Not Applicable (false).
+// Documents inside the section read it so a "No" section never lists its documents as missing.
+export const SectionApplicableContext = createContext(true);
 
 interface T1CRASectionProps {
   title: string;
@@ -125,7 +129,7 @@ export function T1CRASection({
           )}
 
           {hasRenderableChildren ? (
-            children
+            <SectionApplicableContext.Provider value={applicable}>{children}</SectionApplicableContext.Provider>
           ) : (
             <div className="py-4 text-center">
               <p className="text-sm text-muted-foreground italic">

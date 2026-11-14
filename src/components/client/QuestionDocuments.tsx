@@ -10,6 +10,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { UnavailableDocRow } from '@/components/client/UnavailableDocRow';
+import { SectionApplicableContext } from '@/components/client/T1CRASection';
+import { requiredDocsToFlag } from '@/lib/missingDocs';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
@@ -110,6 +112,7 @@ export function QuestionDocuments({
   canEdit = true,
 }: QuestionDocumentsProps) {
   const { toast } = useToast();
+  const sectionApplicable = useContext(SectionApplicableContext);
   const [isReuploadOpen, setIsReuploadOpen] = useState(false);
   const [isRequestOpen, setIsRequestOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<DocType | null>(null);
@@ -168,8 +171,11 @@ export function QuestionDocuments({
     return new Set(Array.from(latestBySlot.values()).map((d) => d.id));
   }, [orderedSectionDocs]);
 
+  // A section the client answered No / Not Applicable to is never missing documents.
+  const requiredForThisSection = sectionApplicable ? requiredDocuments : [];
+
   // If no documents and no required documents, don't show the section
-  if (sectionDocs.length === 0 && requiredDocuments.length === 0 && unavailableDocs.length === 0) {
+  if (sectionDocs.length === 0 && requiredForThisSection.length === 0 && unavailableDocs.length === 0) {
     return null;
   }
 
@@ -266,7 +272,12 @@ export function QuestionDocuments({
   // name/keyword match against the label produces false "Missing" flags for
   // documents the client already uploaded. Once anything has landed in this
   // section, treat its required documents as fulfilled rather than guessing.
-  const missingRequiredDocs = sectionDocs.length > 0 || unavailableDocs.length > 0 ? [] : requiredDocuments;
+  const missingRequiredDocs = requiredDocsToFlag({
+    applicable: sectionApplicable,
+    required: requiredDocuments,
+    uploadedCount: sectionDocs.length,
+    unavailableCount: unavailableDocs.length,
+  });
 
   return (
     <div className="mt-4 p-4 rounded-lg border border-dashed border-border/60 bg-muted/20">
