@@ -71,6 +71,10 @@ export interface Client {
   // uploaded since (admin-api's get_clients, from tax_files.status) - the
   // filing status pipeline itself has no distinct value for this.
   hasPendingChangesRequest?: boolean;
+  /** Set on the row of an extra return (another person / amended version). */
+  filingId?: string | null;
+  filingType?: 'self' | 'other_person' | 'amended';
+  taxpayerLabel?: string | null;
 }
 export interface T1Question {
   id: string;

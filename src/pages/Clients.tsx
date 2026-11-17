@@ -139,6 +139,9 @@ export default function Clients() {
         t1FormCount: f.t1_form_count ?? f.t1FormCount ?? 0,
         latestFiling: f.latest_filing ? new Date(f.latest_filing) : new Date(f.created_at),
         hasPendingChangesRequest: !!f.has_pending_changes_request,
+        filingId: f.filing_id || null,
+        filingType: f.filing_type || 'self',
+        taxpayerLabel: f.taxpayer_label || null,
       }));
 
       setClients(mappedClients);
@@ -177,8 +180,15 @@ export default function Clients() {
       sortable: true,
       render: (client: Client) => (
         <div>
-          <p className="font-medium flex items-center gap-2">
+          <p className="font-medium flex items-center gap-2 flex-wrap">
             {client.name}
+            {/* A client can file several returns in one year; say which kind this row is. */}
+            {client.filingType === 'other_person' && (
+              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800">For another person</span>
+            )}
+            {client.filingType === 'amended' && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">Amended return</span>
+            )}
             {activity.isNew(client.email) && (
               <span
                 className="inline-flex items-center gap-1 rounded-full border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400 whitespace-nowrap"

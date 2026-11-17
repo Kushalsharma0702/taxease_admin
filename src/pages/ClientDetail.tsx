@@ -306,10 +306,31 @@ export default function ClientDetail() {
         // 2. Store all filings for the selector
         const filings = allFilingsResp?.filings || [];
         setAllFilings(filings);
-        if (filings.length > 0) setSelectedFilingId(filings[0].filing_id);
+
+        // A client can have several returns in one year (their own, another person's, an amended one) and
+        // each has its own row. Show THIS row's return: the row's own filing for an extra return, else the
+        // client's own return for the row's year.
+        const rowYear = filingData?.filing_year;
+        const targetFiling =
+          (filingData?.filing_id && filings.find((f: any) => f.filing_id === filingData.filing_id)) ||
+          filings.find((f: any) => (f.filing_type || 'self') === 'self' && f.filing_year === rowYear) ||
+          filings.find((f: any) => f.filing_year === rowYear) ||
+          filings[0];
+        const targetFilingId: string | undefined = targetFiling?.filing_id;
+        if (targetFilingId) setSelectedFilingId(targetFilingId);
 
         // 3. userT1Data shape: { user_id, has_t1_form, t1_form: { ...answers } }
-        const fullT1Form = userT1Data?.t1_form || null;
+        let fullT1Form = userT1Data?.t1_form || null;
+        let docsForPage = (docsResp as any)?.documents || [];
+        if (targetFilingId && filings.length > 1) {
+          // Only needed with several returns: the default answers/documents belong to whichever return is newest.
+          if (fullT1Form?.filing_id !== targetFilingId) {
+            const forThis = await api.getUserT1FormData(effectiveUserId, targetFilingId).catch(() => null);
+            fullT1Form = forThis?.t1_form || null;
+          }
+          const docsThis = await api.getDocuments({ client_id: id, filing_id: targetFilingId }).catch(() => null);
+          if (docsThis) docsForPage = docsThis.documents;
+        }
 
         setT1FormData(fullT1Form || null);
 
@@ -317,7 +338,7 @@ export default function ClientDetail() {
         if (fullT1Form) buildQuestionnaire(fullT1Form, id);
 
         // 4. Set documents and payments from real API
-        setDocuments((docsResp as any)?.documents || []);
+        setDocuments(docsForPage);
         setPayments(Array.isArray(paymentsResp) ? paymentsResp : []);
         // Independent of the main Promise.all above — a failure here
         // shouldn't block the rest of the page from loading.
@@ -1583,6 +1604,9 @@ export default function ClientDetail() {
                       const fullT1 = data?.t1_form || null;
                       setT1FormData(fullT1);
                       if (fullT1) buildQuestionnaire(fullT1, uid);
+                      // The documents belong to the return too, not to the whole account.
+                      const docsForReturn = await api.getDocuments({ client_id: id!, filing_id: val }).catch(() => null);
+                      if (docsForReturn) setDocuments(docsForReturn.documents);
                     } catch (e) {
                       console.error('Failed to load T1 for filing', val, e);
                     } finally {
@@ -1597,7 +1621,11 @@ export default function ClientDetail() {
                     {allFilings.map((f: any, idx: number) => (
                       <SelectItem key={f.filing_id} value={f.filing_id}>
                         <span className="flex items-center gap-2">
-                          <span>Filing {idx + 1} — {f.filing_year}</span>
+                          <span>
+                            {f.filing_year} — {f.filing_type === 'other_person'
+                              ? `Return for ${f.taxpayer_label || 'another person'}`
+                              : f.filing_type === 'amended' ? 'Amended return' : (allFilings.length > 1 ? 'Own return' : `Filing ${idx + 1}`)}
+                          </span>
                           {f.t1_form && (
                             <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                               f.t1_form.status === 'submitted'

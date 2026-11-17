@@ -578,11 +578,12 @@ class ApiService {
     return this.request<Blob>(`/documents/${fileId}/download`);
   }
 
-  async getDocuments(params?: { status?: string; search?: string; client_id?: string }) {
+  async getDocuments(params?: { status?: string; search?: string; client_id?: string; filing_id?: string }) {
     const q = new URLSearchParams();
     if (params?.status) q.append('status', params.status);
     if (params?.search) q.append('search', params.search);
     if (params?.client_id) q.append('client_id', params.client_id);
+    if (params?.filing_id) q.append('filing_id', params.filing_id);
     const qs = q.toString();
     const result = await this.request<{ documents?: any[]; files?: any[]; total: number }>(
       `/documents${qs ? `?${qs}` : ''}`
